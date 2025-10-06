@@ -18,18 +18,34 @@ prepare_prompt() {
 **Description**:
 ${PR_DESCRIPTION:-No description provided}"
 
-  # Replace placeholders in prompt
-  cat "$prompt_file" | \
-    sed "s|{{PR_CONTEXT}}|${PR_CONTEXT}|g" | \
-    sed "s|{{BASE_BRANCH}}|${BASE_BRANCH}|g" | \
-    sed "s|{{HEAD_BRANCH}}|${HEAD_BRANCH}|g" | \
-    sed "s|{{PR_TITLE}}|${PR_TITLE}|g" | \
-    sed "s|{{PR_DESCRIPTION}}|${PR_DESCRIPTION:-No description provided}|g" | \
-    sed "s|{{PR_NUMBER}}|${PR_NUMBER}|g" | \
-    sed "s|{{PR_URL}}|${PR_URL}|g" | \
-    sed "s|{{PR_AUTHOR}}|${PR_AUTHOR}|g" | \
-    sed "s|{{PR_LABELS}}|${PR_LABELS:-none}|g" \
-    > "$output_file"
+  # Read prompt template
+  PROMPT_CONTENT=$(cat "$prompt_file")
+  
+  # Replace placeholders using bash string replacement (NOT sed)
+  # This handles special characters safely
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_CONTEXT\}\}/${PR_CONTEXT}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{BASE_BRANCH\}\}/${BASE_BRANCH}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{HEAD_BRANCH\}\}/${HEAD_BRANCH}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_TITLE\}\}/${PR_TITLE}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_DESCRIPTION\}\}/${PR_DESCRIPTION:-No description provided}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_NUMBER\}\}/${PR_NUMBER}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_URL\}\}/${PR_URL}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_AUTHOR\}\}/${PR_AUTHOR}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_LABELS\}\}/${PR_LABELS:-none}}"
+  
+  # Write to temp file
+  echo "$PROMPT_CONTENT" > "$output_file"
+  
+  # Verify prompt is not empty
+  if [ ! -s "$output_file" ]; then
+    echo "::error::Prompt file is empty after placeholder replacement"
+    echo "  Original file size: $(wc -c < "$prompt_file") bytes"
+    echo "  This usually means:"
+    echo "  1. Prompt template file was empty"
+    echo "  2. GitHub environment variables not set"
+    echo "  3. Placeholder replacement failed"
+    return 1
+  fi
   
   echo "$output_file"
 }
@@ -43,8 +59,18 @@ run_gemini() {
   while [ $retry_count -le $max_retries ]; do
     echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running Gemini validation..."
     
-    # Run Gemini CLI and capture output
-    if gemini -y -m "$GEMINI_MODEL" < "$prompt_file" > /tmp/validation-full-output.md 2>&1; then
+    # Debug: Check prompt file
+    if [ ! -f "$prompt_file" ]; then
+      echo "::error::Prompt file does not exist: $prompt_file"
+      return 1
+    fi
+    
+    echo "Prompt file: $prompt_file"
+    echo "Prompt file size: $(wc -c < "$prompt_file") bytes"
+    echo "Prompt file lines: $(wc -l < "$prompt_file") lines"
+    
+    # Run Gemini CLI using --prompt flag instead of stdin
+    if gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" > /tmp/validation-full-output.md 2>&1; then
       echo "✅ Validation completed successfully"
       return 0
     else
@@ -105,15 +131,35 @@ extract_report() {
   
   # Strategy 4: Use full output with warning
   echo "::warning::Could not find report markers. Using full output."
+  echo "::group::Gemini Full Output (first 50 lines)"
+  head -50 "$full_output" || echo "Could not read output file"
+  echo "::endgroup::"
+  
+  if [ ! -f "$full_output" ]; then
+    echo "::error::Full output file does not exist: $full_output"
+    return 1
+  fi
+  
   cp "$full_output" "$report_file"
+  
+  if [ ! -f "$report_file" ]; then
+    echo "::error::Failed to create report file: $report_file"
+    return 1
+  fi
+  
+  echo "✅ Report file created (using full output)"
   return 0
 }
 
-# Parse validation results
+# Parse validation results and set GitHub outputs
 parse_results() {
   local report_file="$1"
   
   # Check for PASS/FAIL status
+  local validation_status
+  local validation_passed
+  local critical_issues
+  
   if grep -q -i "Status.*PASS" "$report_file" || grep -q "✅" "$report_file"; then
     validation_status="passed"
     validation_passed="true"
@@ -123,16 +169,30 @@ parse_results() {
   fi
   
   # Count critical issues (looking for unchecked critical violations)
-  critical_issues=$(grep -c "^- \[ \] \*\*" "$report_file" || echo "0")
+  critical_issues=$(grep -c "^- \[ \] \*\*" "$report_file" 2>/dev/null || echo "0")
   
   # If status is fail but no critical issues found, set to 1
-  if [ "$validation_status" == "failed" ] && [ "$critical_issues" -eq 0 ]; then
+  if [ "$validation_status" = "failed" ] && [ "$critical_issues" -eq 0 ]; then
     critical_issues=1
   fi
   
-  echo "validation_status=$validation_status"
-  echo "validation_passed=$validation_passed"
-  echo "critical_issues=$critical_issues"
+  # Write outputs using heredoc delimiter (multiline-safe, prevents injection)
+  {
+    echo "validation_status<<EOF"
+    echo "$validation_status"
+    echo "EOF"
+    echo "validation_passed<<EOF"
+    echo "$validation_passed"
+    echo "EOF"
+    echo "critical_issues<<EOF"
+    echo "$critical_issues"
+    echo "EOF"
+  } >> "$GITHUB_OUTPUT"
+  
+  echo "✅ Outputs written successfully"
+  
+  # Export for display
+  echo "$validation_status|$validation_passed|$critical_issues"
 }
 
 # Main execution
@@ -147,29 +207,50 @@ main() {
   if ! run_gemini "$prompt_with_replacements"; then
     echo "::error::Validation execution failed"
     
-    # Set failed outputs
-    echo "validation_status=failed" >> $GITHUB_OUTPUT
-    echo "validation_passed=false" >> $GITHUB_OUTPUT
-    echo "critical_issues=1" >> $GITHUB_OUTPUT
+    # Set failed outputs using heredoc delimiter
+    {
+      echo "validation_status<<EOF"
+      echo "error"
+      echo "EOF"
+      echo "validation_passed<<EOF"
+      echo "false"
+      echo "EOF"
+      echo "critical_issues<<EOF"
+      echo "0"
+      echo "EOF"
+    } >> "$GITHUB_OUTPUT"
     
+    echo "❌ Outputs set to error state"
     exit 1
   fi
   
   # Extract report from output
-  echo "Extracting validation report..."
-  if ! extract_report "/tmp/validation-full-output.md"; then
-    echo "::error::Failed to extract validation report"
+  echo "::group::Extracting validation report"
+  echo "Full output file: /tmp/validation-full-output.md"
+  if [ -f "/tmp/validation-full-output.md" ]; then
+    echo "✅ Full output file exists ($(wc -l < /tmp/validation-full-output.md) lines)"
+  else
+    echo "::error::Full output file does not exist!"
     exit 1
   fi
   
+  if ! extract_report "/tmp/validation-full-output.md"; then
+    echo "::error::Failed to extract validation report"
+    echo "::endgroup::"
+    exit 1
+  fi
+  echo "::endgroup::"
+  
   # Parse results and set outputs
   echo "Parsing validation results..."
-  parse_results "/tmp/validation-report.md"
   
-  # Set GitHub outputs
+  # Set GitHub outputs and get results
   if [ -f "/tmp/validation-report.md" ]; then
+    # parse_results writes to GITHUB_OUTPUT and returns display values
     results=$(parse_results "/tmp/validation-report.md")
-    echo "$results" >> $GITHUB_OUTPUT
+    
+    # Extract values for display (pipe-separated format)
+    IFS='|' read -r validation_status validation_passed critical_issues <<< "$results"
     
     # Display summary
     echo ""
@@ -179,11 +260,26 @@ main() {
     cat "/tmp/validation-report.md" | head -50
     echo ""
     echo "================================"
-    echo "Status: $(echo "$results" | grep validation_status | cut -d= -f2)"
-    echo "Critical Issues: $(echo "$results" | grep critical_issues | cut -d= -f2)"
+    echo "Status: $validation_status"
+    echo "Critical Issues: $critical_issues"
     echo "================================"
   else
     echo "::error::Report file not generated"
+    
+    # Set error outputs using heredoc delimiter
+    {
+      echo "validation_status<<EOF"
+      echo "error"
+      echo "EOF"
+      echo "validation_passed<<EOF"
+      echo "false"
+      echo "EOF"
+      echo "critical_issues<<EOF"
+      echo "0"
+      echo "EOF"
+    } >> "$GITHUB_OUTPUT"
+    
+    echo "❌ Outputs set to error state (no report)"
     exit 1
   fi
   

@@ -1,0 +1,47 @@
+name: Release Please
+
+# Automates releases using conventional commits
+# - Creates/updates release PR based on commits
+# - Generates CHANGELOG.md automatically
+# - Creates GitHub releases with tags for marketplace
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/release-please-action@v4
+        id: release
+        with:
+          # GitHub Action release type
+          release-type: simple
+          
+          # Package name for releases
+          package-name: usable-pr-validator
+          
+          # Include these types in changelog
+          changelog-types: |
+            [
+              {"type":"feat","section":"Features","hidden":false},
+              {"type":"fix","section":"Bug Fixes","hidden":false},
+              {"type":"docs","section":"Documentation","hidden":false},
+              {"type":"chore","section":"Miscellaneous","hidden":false},
+              {"type":"refactor","section":"Code Refactoring","hidden":false},
+              {"type":"perf","section":"Performance Improvements","hidden":false}
+            ]
+      
+      - name: Display Release Information
+        if: ${{ steps.release.outputs.release_created }}
+        run: |
+          echo "🎉 Release created!"
+          echo "Tag: ${{ steps.release.outputs.tag_name }}"
+          echo "Version: ${{ steps.release.outputs.version }}"
+          echo "Release PR: ${{ steps.release.outputs.pr }}"
