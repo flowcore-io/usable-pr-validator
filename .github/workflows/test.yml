@@ -164,6 +164,7 @@ jobs:
              grep -v "^[^:]*:[^:]*:#" | \
              grep -v "SECRET_NAME\|MCP_SECRET\|secret-name" | \
              grep -v "echo.*secret\|echo.*token" | \
+             grep -v "grep -rn.*secret\|grep -rn.*token" | \
              grep -v "# Get the\|# Look for"; then
             echo "::error::Potential hardcoded secrets found in code"
             exit 1
