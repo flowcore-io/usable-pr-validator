@@ -101,20 +101,20 @@ That's it! Your PRs will now be validated automatically. 🎉
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `prompt-file` | Path to validation prompt markdown file | ✅ Yes | - |
-| `gemini-model` | Gemini model to use | No | `gemini-2.5-flash` |
+| `gemini-model` | Gemini model to use (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.5-pro`) | No | `gemini-2.5-flash` |
 | `service-account-key-secret` | Secret name for service account key | No | `GEMINI_SERVICE_ACCOUNT_KEY` |
 | `mcp-server-url` | Usable MCP server URL | No | `https://usable.dev/api/mcp` |
 | `mcp-token-secret` | Secret name for Usable API token | No | `USABLE_API_TOKEN` |
-
-> **Note**: You must set the `USABLE_API_TOKEN` secret (or the custom secret name specified in `mcp-token-secret`). Usable MCP integration is required for this action.
 | `fail-on-critical` | Fail build on critical violations | No | `true` |
 | `comment-mode` | PR comment behavior (`update`/`new`/`none`) | No | `update` |
 | `comment-title` | Title for PR comment (for multi-stage validation) | No | `Automated Standards Validation` |
 | `artifact-retention-days` | Days to retain reports | No | `30` |
 | `max-retries` | Maximum retry attempts | No | `2` |
-| `timeout-minutes` | Maximum execution time | No | `15` |
-| `base-ref` | Base reference for diff (e.g., tag or branch) | No | PR base branch |
-| `head-ref` | Head reference for diff | No | PR head branch |
+| `timeout-minutes` | Maximum execution time in minutes | No | `15` |
+| `base-ref` | Base reference for diff comparison. Useful for release-please branches to compare against last release tag instead of base branch. | No | PR base branch |
+| `head-ref` | Head reference for diff comparison | No | PR head branch |
+
+> **Note**: You must set the `USABLE_API_TOKEN` secret (or the custom secret name specified in `mcp-token-secret`). Usable MCP integration is required for this action.
 
 ### Outputs
 
