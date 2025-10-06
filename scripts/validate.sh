@@ -105,7 +105,23 @@ extract_report() {
   
   # Strategy 4: Use full output with warning
   echo "::warning::Could not find report markers. Using full output."
+  echo "::group::Gemini Full Output (first 50 lines)"
+  head -50 "$full_output" || echo "Could not read output file"
+  echo "::endgroup::"
+  
+  if [ ! -f "$full_output" ]; then
+    echo "::error::Full output file does not exist: $full_output"
+    return 1
+  fi
+  
   cp "$full_output" "$report_file"
+  
+  if [ ! -f "$report_file" ]; then
+    echo "::error::Failed to create report file: $report_file"
+    return 1
+  fi
+  
+  echo "✅ Report file created (using full output)"
   return 0
 }
 
@@ -156,11 +172,21 @@ main() {
   fi
   
   # Extract report from output
-  echo "Extracting validation report..."
-  if ! extract_report "/tmp/validation-full-output.md"; then
-    echo "::error::Failed to extract validation report"
+  echo "::group::Extracting validation report"
+  echo "Full output file: /tmp/validation-full-output.md"
+  if [ -f "/tmp/validation-full-output.md" ]; then
+    echo "✅ Full output file exists ($(wc -l < /tmp/validation-full-output.md) lines)"
+  else
+    echo "::error::Full output file does not exist!"
     exit 1
   fi
+  
+  if ! extract_report "/tmp/validation-full-output.md"; then
+    echo "::error::Failed to extract validation report"
+    echo "::endgroup::"
+    exit 1
+  fi
+  echo "::endgroup::"
   
   # Parse results and set outputs
   echo "Parsing validation results..."
