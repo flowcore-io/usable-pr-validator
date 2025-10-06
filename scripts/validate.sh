@@ -43,8 +43,18 @@ run_gemini() {
   while [ $retry_count -le $max_retries ]; do
     echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running Gemini validation..."
     
-    # Run Gemini CLI and capture output
-    if gemini -y -m "$GEMINI_MODEL" < "$prompt_file" > /tmp/validation-full-output.md 2>&1; then
+    # Debug: Check prompt file
+    if [ ! -f "$prompt_file" ]; then
+      echo "::error::Prompt file does not exist: $prompt_file"
+      return 1
+    fi
+    
+    echo "Prompt file: $prompt_file"
+    echo "Prompt file size: $(wc -c < "$prompt_file") bytes"
+    echo "Prompt file lines: $(wc -l < "$prompt_file") lines"
+    
+    # Run Gemini CLI using --prompt flag instead of stdin
+    if gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" > /tmp/validation-full-output.md 2>&1; then
       echo "✅ Validation completed successfully"
       return 0
     else
