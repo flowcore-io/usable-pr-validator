@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.0 (2025-10-06)
+
+
+### Features
+
+* **action:** :sparkles: add support for custom artifact naming and comment title ([4e1ffe8](https://github.com/flowcore-io/usable-pr-validator/commit/4e1ffe8c78aa82349790092bb50171c9ab337f92))
+* initial implementation of AI-Powered PR Validator ([c99d1ed](https://github.com/flowcore-io/usable-pr-validator/commit/c99d1eddf4cdfaf5612f4363772ef70510e59003))
+* **workflow:** :sparkles: enhance integration tests with detailed validation prompts ([4c41292](https://github.com/flowcore-io/usable-pr-validator/commit/4c412927f672c081508f8221c2dce7cd28e158f5))
+
+
+### Bug Fixes
+
+* **ci:** :bug: add debug information for prompt file validation ([6ab421b](https://github.com/flowcore-io/usable-pr-validator/commit/6ab421b0a7f4d61960f5d24fedcd26f992f4f5d2))
+* **ci:** :bug: add debug steps for action and documentation test results ([06bb48c](https://github.com/flowcore-io/usable-pr-validator/commit/06bb48c21155ee04e146d5ef326a5094d7d2df32))
+* **ci:** :bug: enhance secret detection regex in workflow ([91f9c92](https://github.com/flowcore-io/usable-pr-validator/commit/91f9c923c19409ba18e791765f0d55e2bee65727))
+* **ci:** :bug: enhance validation report extraction with error handling ([7daafe0](https://github.com/flowcore-io/usable-pr-validator/commit/7daafe003d278692cb4394bf55e96f4bb4bd268c))
+* **ci:** :bug: enhance validation result parsing and GitHub output handling ([dd62319](https://github.com/flowcore-io/usable-pr-validator/commit/dd62319669371af57d0e47a2829da71362f47fc5))
+* **ci:** :bug: improve GITHUB_OUTPUT handling in validation script ([fc855a1](https://github.com/flowcore-io/usable-pr-validator/commit/fc855a135900b5dc6db78d3de6adad10ee8fb45f))
+* **ci:** :bug: improve prompt placeholder replacement and add validation checks ([9b33cae](https://github.com/flowcore-io/usable-pr-validator/commit/9b33cae1335f2c65b6295a3a749b030df0a8291e))
+* **ci:** :bug: improve secret detection regex in workflow ([6b13c1e](https://github.com/flowcore-io/usable-pr-validator/commit/6b13c1e0c697b1477f659d907d986fd45551f945))
+* **ci:** :bug: refine secret detection logic in workflow ([c0a293d](https://github.com/flowcore-io/usable-pr-validator/commit/c0a293db3426a9ee4e12a8dc6bffc523318dcddb))
+* **ci:** :bug: update validation script to use heredoc for GitHub output handling ([cd6b0e0](https://github.com/flowcore-io/usable-pr-validator/commit/cd6b0e0f1fc5daf1926238b96d2f36317c9513ab))
+* **ci:** exclude echo statements from security check ([5155c60](https://github.com/flowcore-io/usable-pr-validator/commit/5155c6047c097839302a241b1abe0446371ced56))
+* **ci:** exclude grep command from security check ([e660a25](https://github.com/flowcore-io/usable-pr-validator/commit/e660a2597e4b4002c10983e8e8487d6b5df53a57))
+* **ci:** fix YAML syntax error and security check pattern ([263c43c](https://github.com/flowcore-io/usable-pr-validator/commit/263c43cef55e34e12dbf44c9f1bb8779222b406c))
+* **release:** :sparkles: add GitHub token to release-please configuration ([08d7962](https://github.com/flowcore-io/usable-pr-validator/commit/08d79621078ec560b48c7358f87029af19483833))
+* **release:** :sparkles: add release-please configuration and manifest files ([cd8be5a](https://github.com/flowcore-io/usable-pr-validator/commit/cd8be5a69df9b5a8519f549dc2ddf444f4c6b683))
+* **yaml:** replace template literal with string concatenation ([cb17945](https://github.com/flowcore-io/usable-pr-validator/commit/cb1794568a7436d480bd9fcb45bd32652e6271f8))
+
 ## [Unreleased]
 
 ### Added
