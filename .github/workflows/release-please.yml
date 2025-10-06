@@ -26,6 +26,9 @@ jobs:
           
           # Package name for releases
           package-name: usable-pr-validator
+
+          # Github Token
+          token: ${{ secrets.FLOWCORE_MACHINE_GITHUB_TOKEN }}
           
           # Include these types in changelog
           changelog-types: |
