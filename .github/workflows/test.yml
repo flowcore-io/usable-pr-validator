@@ -1,5 +1,10 @@
 name: Test Action
 
+# This workflow tests the Usable PR Validator action
+# - Lints and validates scripts, templates, and documentation
+# - Runs integration tests on PRs using the action itself
+# - Demonstrates multi-stage validation with separate comments
+
 on:
   push:
     branches: [main, develop]
@@ -187,54 +192,185 @@ jobs:
           echo "✅ Cleanup steps verified"
 
   integration-test:
-    name: Integration Test (Mock)
+    name: Integration Test
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       
-      - name: Create Mock Prompt
+      - name: Create Test Validation Prompt
         run: |
           mkdir -p .github/prompts
-          cat > .github/prompts/test-prompt.md <<'EOF'
-          # Test Validation
+          cat > .github/prompts/test-validation.md <<'EOF'
+          # PR Validation Instructions
+          
+          ## CRITICAL OUTPUT INSTRUCTION
+          **START YOUR OUTPUT DIRECTLY WITH:** `# PR Validation Report`
           
           ## PR Context
           {{PR_CONTEXT}}
           
-          ## Task
-          Output a simple test report.
+          ## Your Task
+          Validate this PR for the usable-pr-validator GitHub Action repository.
           
-          ## Output
+          ### Step 1: Get PR Changes
+          ```bash
+          git diff origin/{{BASE_BRANCH}}...{{HEAD_BRANCH}}
+          ```
+          
+          ### Step 2: Search Usable Knowledge Base
+          Use `agentic-search-fragments` to find relevant standards:
+          - Query: "GitHub Actions best practices and standards"
+          - Query: "Shell script security and validation standards"
+          - Tags: `repo:usable-pr-validator`
+          - Workspace: Check for coding standards and conventions
+          
+          Use `get-memory-fragment-content` to read full details of relevant fragments.
+          
+          ### Step 3: Validation Checks
+          1. **Code Quality**
+             - Shell scripts follow best practices
+             - Proper error handling
+             - Clear variable naming
+          
+          2. **Security**
+             - No hardcoded secrets
+             - Proper cleanup of sensitive data
+             - Secure file permissions
+          
+          3. **Documentation**
+             - Changes are documented
+             - README updates if needed
+             - Comments are clear
+          
+          4. **Action Structure**
+             - Inputs are properly defined
+             - Outputs are correctly set
+             - Error handling is present
+          
+          ## Output Format
           
           # PR Validation Report
           
           ## Summary
-          This is a test validation for PR #{{PR_NUMBER}}.
+          [Brief overview of the changes and validation results]
           
           ## Critical Violations ❌
-          None
+          [Must-fix issues that would break functionality or security]
+          - If none, state "None found"
           
           ## Important Issues ⚠️
-          None
+          [Should-fix issues for code quality and best practices]
+          - If none, state "None found"
           
           ## Suggestions ℹ️
-          None
+          [Nice-to-have improvements and enhancements]
+          - If none, state "None found"
           
           ## Validation Outcome
-          - **Status**: PASS ✅
-          - **Critical Issues**: 0
-          - **Important Issues**: 0
-          - **Suggestions**: 0
+          - **Status**: PASS ✅ or FAIL ❌
+          - **Critical Issues**: [count]
+          - **Important Issues**: [count]
+          - **Suggestions**: [count]
           EOF
       
-      - name: Display Mock Test Info
+      - name: Run Action Test
+        uses: ./
+        with:
+          prompt-file: '.github/prompts/test-validation.md'
+          comment-title: 'Integration Test Validation'
+          comment-mode: 'update'
+          fail-on-critical: false
+        env:
+          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+
+  integration-test-documentation:
+    name: Integration Test (Documentation)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Create Documentation Validation Prompt
         run: |
-          echo "✅ Integration test setup complete"
-          echo "Note: Full integration test requires Gemini credentials"
-          echo "This is a mock test to verify action structure"
+          mkdir -p .github/prompts
+          cat > .github/prompts/test-docs-validation.md <<'EOF'
+          # Documentation Validation Instructions
+          
+          ## CRITICAL OUTPUT INSTRUCTION
+          **START YOUR OUTPUT DIRECTLY WITH:** `# PR Validation Report`
+          
+          ## PR Context
+          {{PR_CONTEXT}}
+          
+          ## Your Task
+          Validate documentation changes in this PR.
+          
+          ### Get Changes
+          ```bash
+          git diff origin/{{BASE_BRANCH}}...{{HEAD_BRANCH}} -- '*.md'
+          ```
+          
+          ### Validation Checks
+          1. **Completeness**
+             - All new features are documented
+             - Examples are provided
+             - Configuration options explained
+          
+          2. **Clarity**
+             - Instructions are clear
+             - Code examples are correct
+             - Links are valid
+          
+          3. **Consistency**
+             - Follows existing documentation style
+             - Terminology is consistent
+             - Formatting is proper
+          
+          ## Output Format
+          
+          # PR Validation Report
+          
+          ## Summary
+          [Overview of documentation changes]
+          
+          ## Critical Violations ❌
+          - If none, state "None found"
+          
+          ## Important Issues ⚠️
+          - If none, state "None found"
+          
+          ## Suggestions ℹ️
+          - If none, state "None found"
+          
+          ## Validation Outcome
+          - **Status**: PASS ✅ or FAIL ❌
+          - **Critical Issues**: [count]
+          - **Important Issues**: [count]
+          - **Suggestions**: [count]
+          EOF
+      
+      - name: Run Documentation Validation
+        uses: ./
+        with:
+          prompt-file: '.github/prompts/test-docs-validation.md'
+          comment-title: 'Documentation Validation'
+          comment-mode: 'update'
+          fail-on-critical: false
+        env:
+          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 
   all-checks-passed:
     name: All Checks Passed
