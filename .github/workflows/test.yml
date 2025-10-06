@@ -283,6 +283,8 @@ jobs:
           EOF
       
       - name: Run Action Test
+        id: test-action
+        continue-on-error: true
         uses: ./
         with:
           prompt-file: '.github/prompts/test-validation.md'
@@ -292,6 +294,18 @@ jobs:
         env:
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+      
+      - name: Debug Test Results
+        if: always()
+        run: |
+          echo "Test result: ${{ steps.test-action.outcome }}"
+          if [ -f "/tmp/validation-full-output.md" ]; then
+            echo "::group::Full Gemini Output"
+            cat /tmp/validation-full-output.md
+            echo "::endgroup::"
+          else
+            echo "⚠️ No full output file found"
+          fi
 
   integration-test-documentation:
     name: Integration Test (Documentation)
@@ -365,6 +379,8 @@ jobs:
           EOF
       
       - name: Run Documentation Validation
+        id: docs-action
+        continue-on-error: true
         uses: ./
         with:
           prompt-file: '.github/prompts/test-docs-validation.md'
@@ -374,6 +390,18 @@ jobs:
         env:
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+      
+      - name: Debug Documentation Results
+        if: always()
+        run: |
+          echo "Docs test result: ${{ steps.docs-action.outcome }}"
+          if [ -f "/tmp/validation-full-output.md" ]; then
+            echo "::group::Full Gemini Output"
+            cat /tmp/validation-full-output.md
+            echo "::endgroup::"
+          else
+            echo "⚠️ No full output file found"
+          fi
 
   all-checks-passed:
     name: All Checks Passed
