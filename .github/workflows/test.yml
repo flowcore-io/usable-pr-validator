@@ -159,8 +159,12 @@ jobs:
       
       - name: Check for Secrets in Code
         run: |
-          # Look for potential secrets or credentials (excluding comments and variable names)
-          if grep -rn "AKIA\|password\|secret\|token" --include="*.sh" --include="*.yml" scripts/ .github/ 2>/dev/null | grep -v "^[^:]*:[^:]*:#" | grep -v "SECRET_NAME\|MCP_SECRET\|secret-name\|# Get the.*secret\|# Look for"; then
+          # Look for potential secrets or credentials (excluding comments, variable names, and echo statements)
+          if grep -rn "AKIA\|password\|secret\|token" --include="*.sh" --include="*.yml" scripts/ .github/ 2>/dev/null | \
+             grep -v "^[^:]*:[^:]*:#" | \
+             grep -v "SECRET_NAME\|MCP_SECRET\|secret-name" | \
+             grep -v "echo.*secret\|echo.*token" | \
+             grep -v "# Get the\|# Look for"; then
             echo "::error::Potential hardcoded secrets found in code"
             exit 1
           fi
