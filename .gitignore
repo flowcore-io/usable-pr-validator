@@ -1,0 +1,39 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Secrets and credentials
+*.json.key
+*service-account*.json
+.env
+.env.local
+*.pem
+*.key
+
+# Temporary files
+/tmp/
+*.tmp
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+test-results/
+coverage/
+.nyc_output/
+
+# Node.js (if adding any Node tooling later)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build artifacts
+dist/
+build/
+*.tar.gz

@@ -1,0 +1,262 @@
+name: 'AI-Powered PR Validator'
+description: 'Validate Pull Requests against custom standards using Google Gemini AI and optional MCP knowledge base integration'
+author: 'Flowcore'
+
+branding:
+  icon: 'check-circle'
+  color: 'green'
+
+inputs:
+  prompt-file:
+    description: 'Path to validation prompt markdown file'
+    required: true
+  gemini-model:
+    description: 'Gemini model to use (gemini-2.5-flash, gemini-2.0-flash, gemini-2.5-pro)'
+    required: false
+    default: 'gemini-2.5-flash'
+  service-account-key-secret:
+    description: 'Name of secret containing base64-encoded Gemini service account key'
+    required: false
+    default: 'GEMINI_SERVICE_ACCOUNT_KEY'
+  mcp-enabled:
+    description: 'Enable MCP server integration for knowledge base access'
+    required: false
+    default: 'false'
+  mcp-server-url:
+    description: 'HTTP URL of MCP server (required if mcp-enabled is true)'
+    required: false
+    default: ''
+  mcp-token-secret:
+    description: 'Name of secret containing MCP server API token'
+    required: false
+    default: 'MCP_API_TOKEN'
+  fail-on-critical:
+    description: 'Fail build when critical violations are found'
+    required: false
+    default: 'true'
+  comment-mode:
+    description: 'PR comment behavior: update, new, or none'
+    required: false
+    default: 'update'
+  artifact-retention-days:
+    description: 'Days to retain validation report artifacts'
+    required: false
+    default: '30'
+  max-retries:
+    description: 'Maximum retry attempts for API failures'
+    required: false
+    default: '2'
+  timeout-minutes:
+    description: 'Maximum validation execution time in minutes'
+    required: false
+    default: '15'
+
+outputs:
+  validation-status:
+    description: 'Validation result: passed or failed'
+    value: ${{ steps.validate.outputs.validation_status }}
+  validation-passed:
+    description: 'Boolean indicating if validation passed (true/false)'
+    value: ${{ steps.validate.outputs.validation_passed }}
+  critical-issues:
+    description: 'Count of critical violations found'
+    value: ${{ steps.validate.outputs.critical_issues }}
+  report-artifact-name:
+    description: 'Name of artifact containing validation report'
+    value: 'pr-validation-report'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        echo "::group::Validating inputs"
+        
+        # Check if prompt file path is provided
+        if [ -z "${{ inputs.prompt-file }}" ]; then
+          echo "::error::prompt-file is required"
+          exit 1
+        fi
+        
+        # Check if prompt file exists
+        if [ ! -f "${{ inputs.prompt-file }}" ]; then
+          echo "::error::Prompt file not found: ${{ inputs.prompt-file }}"
+          exit 1
+        fi
+        
+        # Validate MCP configuration
+        if [ "${{ inputs.mcp-enabled }}" == "true" ] && [ -z "${{ inputs.mcp-server-url }}" ]; then
+          echo "::error::mcp-server-url is required when mcp-enabled is true"
+          exit 1
+        fi
+        
+        # Validate comment mode
+        if [[ ! "${{ inputs.comment-mode }}" =~ ^(update|new|none)$ ]]; then
+          echo "::error::Invalid comment-mode. Must be: update, new, or none"
+          exit 1
+        fi
+        
+        echo "✅ All inputs validated successfully"
+        echo "::endgroup::"
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Install Gemini CLI
+      shell: bash
+      run: |
+        echo "::group::Installing Gemini CLI"
+        npm install -g @google/gemini-cli@0.7.0
+        echo "✅ Gemini CLI installed"
+        echo "::endgroup::"
+    
+    - name: Setup Git
+      shell: bash
+      run: |
+        echo "::group::Configuring Git"
+        git config --global user.email "action@github.com"
+        git config --global user.name "GitHub Action"
+        
+        # Fetch base branch for diff comparison
+        if [ -n "${{ github.event.pull_request.base.ref }}" ]; then
+          echo "Fetching base branch: ${{ github.event.pull_request.base.ref }}"
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+        fi
+        
+        echo "✅ Git configured"
+        echo "::endgroup::"
+    
+    - name: Setup Gemini Authentication
+      shell: bash
+      env:
+        SECRET_NAME: ${{ inputs.service-account-key-secret }}
+      run: |
+        ${{ github.action_path }}/scripts/setup-gemini.sh
+    
+    - name: Setup MCP Server
+      if: inputs.mcp-enabled == 'true'
+      shell: bash
+      env:
+        MCP_URL: ${{ inputs.mcp-server-url }}
+        MCP_SECRET_NAME: ${{ inputs.mcp-token-secret }}
+      run: |
+        ${{ github.action_path }}/scripts/setup-mcp.sh
+    
+    - name: Run Validation
+      id: validate
+      shell: bash
+      timeout-minutes: ${{ fromJSON(inputs.timeout-minutes) }}
+      env:
+        PROMPT_FILE: ${{ inputs.prompt-file }}
+        GEMINI_MODEL: ${{ inputs.gemini-model }}
+        MAX_RETRIES: ${{ inputs.max-retries }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_TITLE: ${{ github.event.pull_request.title }}
+        PR_DESCRIPTION: ${{ github.event.pull_request.body }}
+        PR_URL: ${{ github.event.pull_request.html_url }}
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ', ') }}
+        BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+        HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+      run: |
+        ${{ github.action_path }}/scripts/validate.sh
+    
+    - name: Post PR Comment
+      if: inputs.comment-mode != 'none' && always()
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ github.token }}
+        script: |
+          const fs = require('fs');
+          const commentMode = '${{ inputs.comment-mode }}';
+          const reportPath = '/tmp/validation-report.md';
+          
+          if (!fs.existsSync(reportPath)) {
+            console.log('⚠️ No validation report found to post');
+            return;
+          }
+          
+          const report = fs.readFileSync(reportPath, 'utf8');
+          const marker = '<!-- ai-pr-validator -->';
+          
+          const commentBody = `${marker}
+## 🤖 Automated Standards Validation
+
+${report}
+
+---
+<details>
+<summary>📊 Validation Statistics</summary>
+
+- **Model**: Google Gemini ${{ inputs.gemini-model }}
+- **Standards Source**: ${('${{ inputs.mcp-enabled }}' === 'true') ? '${{ inputs.mcp-server-url }}' : 'Local'}
+- **Commit**: ${context.payload.pull_request.head.sha.substring(0, 7)}
+- **Triggered by**: @${context.actor}
+
+</details>`;
+
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.payload.pull_request.number,
+          });
+          
+          const existingComment = comments.find(comment => 
+            comment.body.includes(marker)
+          );
+          
+          if (commentMode === 'update' && existingComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existingComment.id,
+              body: commentBody,
+            });
+            console.log('✅ Updated existing PR comment');
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: commentBody,
+            });
+            console.log('✅ Created new PR comment');
+          }
+    
+    - name: Upload Validation Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pr-validation-report
+        path: /tmp/validation-report.md
+        retention-days: ${{ fromJSON(inputs.artifact-retention-days) }}
+        if-no-files-found: warn
+    
+    - name: Upload Full Output
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: pr-validation-full-output
+        path: /tmp/validation-full-output.md
+        retention-days: ${{ fromJSON(inputs.artifact-retention-days) }}
+        if-no-files-found: warn
+    
+    - name: Cleanup Secrets
+      if: always()
+      shell: bash
+      run: |
+        # Remove temporary files containing sensitive data
+        rm -f /tmp/service-account.json
+        rm -f /tmp/gemini-settings.json
+        echo "✅ Temporary files cleaned up"
+    
+    - name: Fail on Critical Violations
+      if: inputs.fail-on-critical == 'true' && steps.validate.outputs.validation_passed == 'false'
+      shell: bash
+      run: |
+        echo "::error::❌ Critical violations found in PR validation"
+        echo "Critical issues: ${{ steps.validate.outputs.critical_issues }}"
+        exit 1
