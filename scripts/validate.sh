@@ -18,18 +18,34 @@ prepare_prompt() {
 **Description**:
 ${PR_DESCRIPTION:-No description provided}"
 
-  # Replace placeholders in prompt
-  cat "$prompt_file" | \
-    sed "s|{{PR_CONTEXT}}|${PR_CONTEXT}|g" | \
-    sed "s|{{BASE_BRANCH}}|${BASE_BRANCH}|g" | \
-    sed "s|{{HEAD_BRANCH}}|${HEAD_BRANCH}|g" | \
-    sed "s|{{PR_TITLE}}|${PR_TITLE}|g" | \
-    sed "s|{{PR_DESCRIPTION}}|${PR_DESCRIPTION:-No description provided}|g" | \
-    sed "s|{{PR_NUMBER}}|${PR_NUMBER}|g" | \
-    sed "s|{{PR_URL}}|${PR_URL}|g" | \
-    sed "s|{{PR_AUTHOR}}|${PR_AUTHOR}|g" | \
-    sed "s|{{PR_LABELS}}|${PR_LABELS:-none}|g" \
-    > "$output_file"
+  # Read prompt template
+  PROMPT_CONTENT=$(cat "$prompt_file")
+  
+  # Replace placeholders using bash string replacement (NOT sed)
+  # This handles special characters safely
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_CONTEXT\}\}/${PR_CONTEXT}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{BASE_BRANCH\}\}/${BASE_BRANCH}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{HEAD_BRANCH\}\}/${HEAD_BRANCH}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_TITLE\}\}/${PR_TITLE}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_DESCRIPTION\}\}/${PR_DESCRIPTION:-No description provided}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_NUMBER\}\}/${PR_NUMBER}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_URL\}\}/${PR_URL}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_AUTHOR\}\}/${PR_AUTHOR}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_LABELS\}\}/${PR_LABELS:-none}}"
+  
+  # Write to temp file
+  echo "$PROMPT_CONTENT" > "$output_file"
+  
+  # Verify prompt is not empty
+  if [ ! -s "$output_file" ]; then
+    echo "::error::Prompt file is empty after placeholder replacement"
+    echo "  Original file size: $(wc -c < "$prompt_file") bytes"
+    echo "  This usually means:"
+    echo "  1. Prompt template file was empty"
+    echo "  2. GitHub environment variables not set"
+    echo "  3. Placeholder replacement failed"
+    return 1
+  fi
   
   echo "$output_file"
 }
