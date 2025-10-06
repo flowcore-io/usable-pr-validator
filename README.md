@@ -99,9 +99,9 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `prompt-file` | Path to validation prompt markdown file | ✅ Yes | - |
 | `gemini-model` | Gemini model to use | No | `gemini-2.5-flash` |
 | `service-account-key-secret` | Secret name for service account key | No | `GEMINI_SERVICE_ACCOUNT_KEY` |
-| `mcp-enabled` | Enable MCP server integration | No | `false` |
-| `mcp-server-url` | HTTP URL of MCP server | No | - |
-| `mcp-token-secret` | Secret name for MCP token | No | `MCP_API_TOKEN` |
+| `mcp-enabled` | Enable Usable MCP integration | No | `false` |
+| `mcp-server-url` | Usable MCP server URL | No | `https://usable.dev/api/mcp` |
+| `mcp-token-secret` | Secret name for Usable API token | No | `USABLE_API_TOKEN` |
 | `fail-on-critical` | Fail build on critical violations | No | `true` |
 | `comment-mode` | PR comment behavior (`update`/`new`/`none`) | No | `update` |
 | `artifact-retention-days` | Days to retain reports | No | `30` |
@@ -129,17 +129,16 @@ That's it! Your PRs will now be validated automatically. 🎉
     GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
 ```
 
-### With MCP Knowledge Base
+### With Usable Knowledge Base
 
 ```yaml
 - uses: flowcore/usable-pr-validator@v1
   with:
     prompt-file: '.github/prompts/validate.md'
-    mcp-enabled: true
-    mcp-server-url: 'https://usable.dev/api/mcp'
+    mcp-enabled: true  # Defaults to Usable automatically!
   env:
     GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
-    MCP_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+    USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
 ### Advanced Configuration
