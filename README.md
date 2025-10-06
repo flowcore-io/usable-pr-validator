@@ -49,13 +49,12 @@ git diff origin/{{BASE_BRANCH}}...{{HEAD_BRANCH}}
 
 [See templates/ directory for complete examples]
 
-```
-
 ### Step 2: Add GitHub Secrets
 
 Go to your repository Settings → Secrets → Actions and add:
 
 - `GEMINI_SERVICE_ACCOUNT_KEY`: Base64-encoded service account JSON key
+
   ```bash
   cat service-account.json | base64
   ```
@@ -114,6 +113,8 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `artifact-retention-days` | Days to retain reports | No | `30` |
 | `max-retries` | Maximum retry attempts | No | `2` |
 | `timeout-minutes` | Maximum execution time | No | `15` |
+| `base-ref` | Base reference for diff (e.g., tag or branch) | No | PR base branch |
+| `head-ref` | Head reference for diff | No | PR head branch |
 
 ### Outputs
 
@@ -207,6 +208,51 @@ jobs:
 ```
 
 > **Note**: Each `comment-title` creates a separate PR comment that updates independently. Artifacts are also uniquely named based on the title.
+
+### Release-Please Integration
+
+Validate all changes since the last release for release-please PRs:
+
+```yaml
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      # Determine base reference for release-please branches
+      - name: Get base reference
+        id: base-ref
+        run: |
+          if [[ "${{ github.head_ref }}" == release-please--* ]]; then
+            # For release-please branches, compare against last release tag
+            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "${{ github.event.pull_request.base.ref }}")
+            echo "ref=${LAST_TAG}" >> $GITHUB_OUTPUT
+            echo "Comparing against last release: ${LAST_TAG}"
+          else
+            # For regular PRs, use base branch
+            echo "ref=${{ github.event.pull_request.base.ref }}" >> $GITHUB_OUTPUT
+            echo "Comparing against base branch: ${{ github.event.pull_request.base.ref }}"
+          fi
+      
+      - uses: flowcore/usable-pr-validator@latest
+        with:
+          prompt-file: '.github/prompts/pr-validation.md'
+          base-ref: ${{ steps.base-ref.outputs.ref }}  # Custom base reference
+        env:
+          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+```
+
+> **Tip**: This ensures release-please PRs validate all accumulated changes since the previous release, not just the most recent commit.
 
 ## 📝 Prompt Engineering
 
@@ -330,7 +376,7 @@ permissions:
   pull-requests: write  # Post comments
 ```
 
-### Best Practices
+### Security Best Practices
 
 1. Use Vertex AI (recommended) over API keys
 2. Rotate service account keys regularly

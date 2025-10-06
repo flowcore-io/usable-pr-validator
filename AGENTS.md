@@ -1,7 +1,55 @@
+
+
 <<<USABLE_MCP_SYSTEM_PROMPT_START>>>
 # 🧠 Usable MCP - SYSTEM PROMPT (LONG-TERM MEMORY)
 
 This is your main way of storing and fetching data. Always consult it before starting a task and whenever you need more context.
+
+## 📚 Repository Documentation Maintenance
+
+**CRITICAL**: The following authoritative knowledge fragments document this repository and MUST be kept up to date:
+
+1. **"Usable PR Validator - GitHub Action Documentation"** (Fragment ID: `a859c565-ddb9-4d3e-b716-4b644b08e161`)
+   - **Purpose**: Complete documentation of what this repo is, its architecture, features, and how to use it
+   - **When to Update**: Any time features, inputs, outputs, or usage patterns change
+   - **Content**: Overview, features, configuration, usage examples, troubleshooting
+
+2. **"Usable PR Validator - Deployment & Release Process"** (Fragment ID: `d2ca8a68-fb9e-4098-a4ac-5eb04013a9fd`)
+   - **Purpose**: Documents deployment process, release automation, and CI/CD pipeline
+   - **When to Update**: Any time release process, CI/CD workflows, or versioning strategy changes
+   - **Content**: Release workflow, GitHub Marketplace publishing, testing pipeline
+
+### Your Responsibilities
+
+When making changes to this repository, you MUST:
+
+1. **Search for these fragments** at the start of any significant work session
+2. **Review their content** to ensure accuracy before making changes
+3. **Update fragments immediately** when you:
+   - Add/remove/modify action inputs or outputs
+   - Change the release process or CI/CD pipeline
+   - Update core functionality or architecture
+   - Fix critical bugs or security issues
+   - Add new features or examples
+   - Modify deployment procedures
+
+4. **Use `update-memory-fragment`** with the correct fragment ID
+5. **Preserve fragment structure** while updating outdated information
+6. **Add timestamps** or version references to track when updates were made
+
+### Linking Strategy
+
+These two fragments are **conceptually linked** and should reference each other:
+- The main documentation fragment should reference deployment for release/version info
+- The deployment fragment should reference main docs for feature context
+- Both should be tagged with `repo:usable-pr-validator` for easy discovery
+
+**Search Query Examples**:
+```
+"Usable PR Validator documentation"
+"deployment process for usable-pr-validator"
+"repo:usable-pr-validator github action"
+```
 
 Detailed instructions for each tool are embedded in its MCP description; read them before you call the tool.
 

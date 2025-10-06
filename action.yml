@@ -50,6 +50,14 @@ inputs:
     description: 'Maximum validation execution time in minutes'
     required: false
     default: '15'
+  base-ref:
+    description: 'Base reference for diff comparison (defaults to PR base branch). Useful for release-please branches to compare against last release tag.'
+    required: false
+    default: ''
+  head-ref:
+    description: 'Head reference for diff comparison (defaults to PR head branch)'
+    required: false
+    default: ''
 
 outputs:
   validation-status:
@@ -162,8 +170,8 @@ runs:
         PR_URL: ${{ github.event.pull_request.html_url }}
         PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ', ') }}
-        BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
-        HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        BASE_BRANCH: ${{ inputs.base-ref || github.event.pull_request.base.ref }}
+        HEAD_BRANCH: ${{ inputs.head-ref || github.event.pull_request.head.ref }}
       run: |
         ${{ github.action_path }}/scripts/validate.sh
     
