@@ -191,7 +191,7 @@ ${report}
 <details>
 <summary>📊 Validation Statistics</summary>
 
-- **Model**: Google Gemini ${{ inputs.gemini-model }}
+- **Model**: Google Gemini ${'${{ inputs.gemini-model }}'}
 - **Standards Source**: ${('${{ inputs.mcp-enabled }}' === 'true') ? '${{ inputs.mcp-server-url }}' : 'Local'}
 - **Commit**: ${context.payload.pull_request.head.sha.substring(0, 7)}
 - **Triggered by**: @${context.actor}
