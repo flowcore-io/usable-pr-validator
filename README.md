@@ -85,7 +85,7 @@ jobs:
         with:
           fetch-depth: 0
       
-      - uses: flowcore/usable-pr-validator@v1
+      - uses: flowcore/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/pr-validation.md'
         env:
@@ -129,7 +129,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 ### Minimal Setup
 
 ```yaml
-- uses: flowcore/usable-pr-validator@v1
+- uses: flowcore/usable-pr-validator@latest
   with:
     prompt-file: '.github/prompts/validate.md'
   env:
@@ -140,7 +140,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 ### With Custom MCP Server
 
 ```yaml
-- uses: flowcore/usable-pr-validator@v1
+- uses: flowcore/usable-pr-validator@latest
   with:
     prompt-file: '.github/prompts/validate.md'
     mcp-server-url: 'https://your-custom-mcp.com/api/mcp'
@@ -153,7 +153,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 ### Advanced Configuration
 
 ```yaml
-- uses: flowcore/usable-pr-validator@v1
+- uses: flowcore/usable-pr-validator@latest
   with:
     prompt-file: '.github/validation/standards.md'
     gemini-model: 'gemini-2.5-pro'
@@ -182,7 +182,7 @@ jobs:
         with:
           fetch-depth: 0
       
-      - uses: flowcore/usable-pr-validator@v1
+      - uses: flowcore/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/backend-standards.md'
           comment-title: 'Backend Validation'  # Creates unique comment
@@ -197,7 +197,7 @@ jobs:
         with:
           fetch-depth: 0
       
-      - uses: flowcore/usable-pr-validator@v1
+      - uses: flowcore/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/frontend-standards.md'
           comment-title: 'Frontend Validation'  # Creates unique comment
@@ -289,7 +289,7 @@ Usable is a team knowledge base and memory system that stores your:
 3. **Configure Workflow**
 
    ```yaml
-   - uses: flowcore-io/usable-pr-validator@v1
+   - uses: flowcore/usable-pr-validator@latest
      with:
        prompt-file: '.github/prompts/pr-validation.md'
      env:
@@ -429,11 +429,11 @@ This action follows [Semantic Versioning](https://semver.org/) and uses automate
 ### Using Specific Versions
 
 ```yaml
-# Major version (recommended - gets latest compatible updates)
-- uses: flowcore/usable-pr-validator@v0
+# Latest stable release (recommended)
+- uses: flowcore/usable-pr-validator@latest
 
 # Specific version (pinned)
-- uses: flowcore/usable-pr-validator@v0.2.3
+- uses: flowcore/usable-pr-validator@v1.0.0
 
 # Latest commit on main (not recommended for production)
 - uses: flowcore/usable-pr-validator@main
@@ -441,13 +441,11 @@ This action follows [Semantic Versioning](https://semver.org/) and uses automate
 
 ### Version Strategy
 
-- **Major (v0.x.x → v1.x.x)**: Breaking changes requiring user action
-- **Minor (v0.1.x → v0.2.x)**: New features, may have breaking changes in 0.x
-- **Patch (v0.1.0 → v0.1.1)**: Bug fixes, backward compatible
+- **Major (v1.x.x → v2.x.x)**: Breaking changes requiring user action
+- **Minor (v1.0.x → v1.1.x)**: New features, backward compatible
+- **Patch (v1.0.0 → v1.0.1)**: Bug fixes, backward compatible
 
-We recommend using the major version tag (e.g., `@v0`) to automatically receive compatible updates.
-
-> **Note**: We're currently in 0.x (pre-1.0) development. The API may change between minor versions. Pin to specific versions if stability is critical.
+We recommend using `@latest` to automatically receive the newest stable release.
 
 ## 🤝 Contributing
 
