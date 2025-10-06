@@ -23,7 +23,8 @@
 
 1. A Google Cloud project with Vertex AI API enabled
 2. A service account key with Vertex AI permissions
-3. GitHub repository with pull requests
+3. A Usable account with API token ([get one at usable.dev](https://usable.dev))
+4. GitHub repository with pull requests
 
 ### Step 1: Create Validation Prompt
 
@@ -58,6 +59,8 @@ Go to your repository Settings → Secrets → Actions and add:
   cat service-account.json | base64
   ```
 
+- `USABLE_API_TOKEN`: Your Usable API token (get from [usable.dev](https://usable.dev) → Settings → API Tokens)
+
 ### Step 3: Create Workflow
 
 Create `.github/workflows/pr-validation.yml`:
@@ -86,6 +89,7 @@ jobs:
           prompt-file: '.github/prompts/pr-validation.md'
         env:
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
 That's it! Your PRs will now be validated automatically. 🎉
@@ -99,13 +103,13 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `prompt-file` | Path to validation prompt markdown file | ✅ Yes | - |
 | `gemini-model` | Gemini model to use | No | `gemini-2.5-flash` |
 | `service-account-key-secret` | Secret name for service account key | No | `GEMINI_SERVICE_ACCOUNT_KEY` |
-| `mcp-enabled` | Enable Usable MCP integration | No | `false` |
 | `mcp-server-url` | Usable MCP server URL | No | `https://usable.dev/api/mcp` |
 | `mcp-token-secret` | Secret name for Usable API token | No | `USABLE_API_TOKEN` |
 
-> **Note**: When `mcp-enabled: true`, you must set the `USABLE_API_TOKEN` secret (or the custom secret name specified in `mcp-token-secret`).
+> **Note**: You must set the `USABLE_API_TOKEN` secret (or the custom secret name specified in `mcp-token-secret`). Usable MCP integration is required for this action.
 | `fail-on-critical` | Fail build on critical violations | No | `true` |
 | `comment-mode` | PR comment behavior (`update`/`new`/`none`) | No | `update` |
+| `comment-title` | Title for PR comment (for multi-stage validation) | No | `Automated Standards Validation` |
 | `artifact-retention-days` | Days to retain reports | No | `30` |
 | `max-retries` | Maximum retry attempts | No | `2` |
 | `timeout-minutes` | Maximum execution time | No | `15` |
@@ -129,18 +133,20 @@ That's it! Your PRs will now be validated automatically. 🎉
     prompt-file: '.github/prompts/validate.md'
   env:
     GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+    USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
-### With Usable Knowledge Base
+### With Custom MCP Server
 
 ```yaml
 - uses: flowcore/usable-pr-validator@v1
   with:
     prompt-file: '.github/prompts/validate.md'
-    mcp-enabled: true  # Defaults to Usable automatically!
+    mcp-server-url: 'https://your-custom-mcp.com/api/mcp'
+    mcp-token-secret: 'YOUR_CUSTOM_TOKEN'
   env:
     GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
-    USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+    YOUR_CUSTOM_TOKEN: ${{ secrets.YOUR_MCP_TOKEN }}
 ```
 
 ### Advanced Configuration
@@ -151,7 +157,6 @@ That's it! Your PRs will now be validated automatically. 🎉
     prompt-file: '.github/validation/standards.md'
     gemini-model: 'gemini-2.5-pro'
     service-account-key-secret: 'MY_GEMINI_KEY'
-    mcp-enabled: true
     mcp-server-url: 'https://confluence.company.com/api/mcp'
     mcp-token-secret: 'CONFLUENCE_TOKEN'
     fail-on-critical: true
@@ -165,6 +170,8 @@ That's it! Your PRs will now be validated automatically. 🎉
 
 ### Multiple Validation Stages
 
+Use `comment-title` to create separate PR comments for each validation stage:
+
 ```yaml
 jobs:
   validate-backend:
@@ -177,8 +184,10 @@ jobs:
       - uses: flowcore/usable-pr-validator@v1
         with:
           prompt-file: '.github/prompts/backend-standards.md'
+          comment-title: 'Backend Validation'  # Creates unique comment
         env:
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
   
   validate-frontend:
     runs-on: ubuntu-latest
@@ -190,9 +199,13 @@ jobs:
       - uses: flowcore/usable-pr-validator@v1
         with:
           prompt-file: '.github/prompts/frontend-standards.md'
+          comment-title: 'Frontend Validation'  # Creates unique comment
         env:
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
+
+> **Note**: Each `comment-title` creates a separate PR comment that updates independently. Artifacts are also uniquely named based on the title.
 
 ## 📝 Prompt Engineering
 
@@ -244,7 +257,7 @@ Your prompt should instruct the AI to output this structure:
 - **Suggestions**: [count]
 ```
 
-## 🔌 Usable Integration
+## 🔌 Usable Integration (Required)
 
 ### What is Usable?
 
@@ -254,7 +267,7 @@ Usable is a team knowledge base and memory system that stores your:
 - Security requirements and best practices
 - Project-specific documentation
 
-This action connects to your Usable workspace via MCP (Model Context Protocol) to validate PRs against your living documentation.
+**This action requires Usable** and connects to your Usable workspace via MCP (Model Context Protocol) to validate PRs against your living documentation. The integration is always enabled and provides the AI with access to your team's knowledge base.
 
 ### Setup
 
@@ -270,17 +283,17 @@ This action connects to your Usable workspace via MCP (Model Context Protocol) t
    GEMINI_SERVICE_ACCOUNT_KEY=base64_encoded_key_here
    ```
 
-3. **Enable in Workflow**
+3. **Configure Workflow**
    ```yaml
    - uses: flowcore-io/usable-pr-validator@v1
      with:
        prompt-file: '.github/prompts/pr-validation.md'
-       mcp-enabled: true
-       mcp-server-url: 'https://usable.dev/api/mcp'
      env:
        GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
-       MCP_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+       USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
    ```
+
+   > **Note**: Usable MCP integration is always enabled and uses `https://usable.dev/api/mcp` by default. You can customize the server URL with the `mcp-server-url` input if needed.
 
 4. **Update Prompt to Use Usable**
    ```markdown

@@ -18,16 +18,12 @@ inputs:
     description: 'Name of secret containing base64-encoded Gemini service account key'
     required: false
     default: 'GEMINI_SERVICE_ACCOUNT_KEY'
-  mcp-enabled:
-    description: 'Enable MCP server integration for knowledge base access'
-    required: false
-    default: 'false'
   mcp-server-url:
-    description: 'HTTP URL of MCP server (required if mcp-enabled is true)'
+    description: 'HTTP URL of MCP server'
     required: false
     default: 'https://usable.dev/api/mcp'
   mcp-token-secret:
-    description: 'Name of secret containing Usable API token (required when mcp-enabled is true)'
+    description: 'Name of secret containing Usable API token'
     required: false
     default: 'USABLE_API_TOKEN'
   fail-on-critical:
@@ -38,6 +34,10 @@ inputs:
     description: 'PR comment behavior: update, new, or none'
     required: false
     default: 'update'
+  comment-title:
+    description: 'Title for PR comment (used to identify which comment to update in multi-stage validations)'
+    required: false
+    default: 'Automated Standards Validation'
   artifact-retention-days:
     description: 'Days to retain validation report artifacts'
     required: false
@@ -63,7 +63,7 @@ outputs:
     value: ${{ steps.validate.outputs.critical_issues }}
   report-artifact-name:
     description: 'Name of artifact containing validation report'
-    value: 'pr-validation-report'
+    value: ${{ steps.set-artifact-name.outputs.artifact_name }}
 
 runs:
   using: 'composite'
@@ -85,12 +85,6 @@ runs:
           exit 1
         fi
         
-        # Validate MCP configuration
-        if [ "${{ inputs.mcp-enabled }}" == "true" ] && [ -z "${{ inputs.mcp-server-url }}" ]; then
-          echo "::error::mcp-server-url is required when mcp-enabled is true"
-          exit 1
-        fi
-        
         # Validate comment mode
         if [[ ! "${{ inputs.comment-mode }}" =~ ^(update|new|none)$ ]]; then
           echo "::error::Invalid comment-mode. Must be: update, new, or none"
@@ -99,6 +93,17 @@ runs:
         
         echo "✅ All inputs validated successfully"
         echo "::endgroup::"
+    
+    - name: Set Artifact Name
+      id: set-artifact-name
+      shell: bash
+      run: |
+        # Create a safe artifact name from the comment title
+        TITLE="${{ inputs.comment-title }}"
+        SAFE_NAME=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+        ARTIFACT_NAME="pr-validation-${SAFE_NAME}"
+        echo "artifact_name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
+        echo "📦 Artifact name: ${ARTIFACT_NAME}"
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -137,7 +142,6 @@ runs:
         ${{ github.action_path }}/scripts/setup-gemini.sh
     
     - name: Setup MCP Server
-      if: inputs.mcp-enabled == 'true'
       shell: bash
       env:
         MCP_URL: ${{ inputs.mcp-server-url }}
@@ -148,7 +152,6 @@ runs:
     - name: Run Validation
       id: validate
       shell: bash
-      timeout-minutes: ${{ fromJSON(inputs.timeout-minutes) }}
       env:
         PROMPT_FILE: ${{ inputs.prompt-file }}
         GEMINI_MODEL: ${{ inputs.gemini-model }}
@@ -172,6 +175,7 @@ runs:
         script: |
           const fs = require('fs');
           const commentMode = '${{ inputs.comment-mode }}';
+          const commentTitle = '${{ inputs.comment-title }}';
           const reportPath = '/tmp/validation-report.md';
           
           if (!fs.existsSync(reportPath)) {
@@ -180,12 +184,14 @@ runs:
           }
           
           const report = fs.readFileSync(reportPath, 'utf8');
-          const marker = '<!-- usable-pr-validator -->';
+          // Create a unique marker based on the comment title
+          const markerId = commentTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          const marker = `<!-- usable-pr-validator:${markerId} -->`;
           
-          const commentBody = marker + '\n## 🤖 Automated Standards Validation\n\n' + 
+          const commentBody = marker + '\n## 🤖 ' + commentTitle + '\n\n' + 
             report + '\n\n---\n<details>\n<summary>📊 Validation Statistics</summary>\n\n' +
             '- **Model**: Google Gemini ${{ inputs.gemini-model }}\n' +
-            '- **Standards Source**: ' + ('${{ inputs.mcp-enabled }}' === 'true' ? '${{ inputs.mcp-server-url }}' : 'Local') + '\n' +
+            '- **Standards Source**: ${{ inputs.mcp-server-url }}\n' +
             '- **Commit**: ' + context.payload.pull_request.head.sha.substring(0, 7) + '\n' +
             '- **Triggered by**: @' + context.actor + '\n\n' +
             '</details>';
@@ -222,7 +228,7 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: pr-validation-report
+        name: ${{ steps.set-artifact-name.outputs.artifact_name }}
         path: /tmp/validation-report.md
         retention-days: ${{ fromJSON(inputs.artifact-retention-days) }}
         if-no-files-found: warn
@@ -231,7 +237,7 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: pr-validation-full-output
+        name: ${{ steps.set-artifact-name.outputs.artifact_name }}-full
         path: /tmp/validation-full-output.md
         retention-days: ${{ fromJSON(inputs.artifact-retention-days) }}
         if-no-files-found: warn
