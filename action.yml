@@ -27,7 +27,7 @@ inputs:
     required: false
     default: 'https://usable.dev/api/mcp'
   mcp-token-secret:
-    description: 'Name of secret containing Usable API token'
+    description: 'Name of secret containing Usable API token (required when mcp-enabled is true)'
     required: false
     default: 'USABLE_API_TOKEN'
   fail-on-critical:

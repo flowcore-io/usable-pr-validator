@@ -102,6 +102,8 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `mcp-enabled` | Enable Usable MCP integration | No | `false` |
 | `mcp-server-url` | Usable MCP server URL | No | `https://usable.dev/api/mcp` |
 | `mcp-token-secret` | Secret name for Usable API token | No | `USABLE_API_TOKEN` |
+
+> **Note**: When `mcp-enabled: true`, you must set the `USABLE_API_TOKEN` secret (or the custom secret name specified in `mcp-token-secret`).
 | `fail-on-critical` | Fail build on critical violations | No | `true` |
 | `comment-mode` | PR comment behavior (`update`/`new`/`none`) | No | `update` |
 | `artifact-retention-days` | Days to retain reports | No | `30` |
