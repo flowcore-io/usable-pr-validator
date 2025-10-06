@@ -151,11 +151,15 @@ extract_report() {
   return 0
 }
 
-# Parse validation results
+# Parse validation results and set GitHub outputs
 parse_results() {
   local report_file="$1"
   
   # Check for PASS/FAIL status
+  local validation_status
+  local validation_passed
+  local critical_issues
+  
   if grep -q -i "Status.*PASS" "$report_file" || grep -q "✅" "$report_file"; then
     validation_status="passed"
     validation_passed="true"
@@ -165,16 +169,22 @@ parse_results() {
   fi
   
   # Count critical issues (looking for unchecked critical violations)
-  critical_issues=$(grep -c "^- \[ \] \*\*" "$report_file" || echo "0")
+  critical_issues=$(grep -c "^- \[ \] \*\*" "$report_file" 2>/dev/null || echo "0")
   
   # If status is fail but no critical issues found, set to 1
-  if [ "$validation_status" == "failed" ] && [ "$critical_issues" -eq 0 ]; then
+  if [ "$validation_status" = "failed" ] && [ "$critical_issues" -eq 0 ]; then
     critical_issues=1
   fi
   
-  echo "validation_status=$validation_status"
-  echo "validation_passed=$validation_passed"
-  echo "critical_issues=$critical_issues"
+  # Write directly to GitHub outputs
+  {
+    echo "validation_status=${validation_status}"
+    echo "validation_passed=${validation_passed}"
+    echo "critical_issues=${critical_issues}"
+  } >> "$GITHUB_OUTPUT"
+  
+  # Export for display
+  echo "$validation_status|$validation_passed|$critical_issues"
 }
 
 # Main execution
@@ -217,17 +227,13 @@ main() {
   # Parse results and set outputs
   echo "Parsing validation results..."
   
-  # Set GitHub outputs
+  # Set GitHub outputs and get results
   if [ -f "/tmp/validation-report.md" ]; then
+    # parse_results writes to GITHUB_OUTPUT and returns display values
     results=$(parse_results "/tmp/validation-report.md")
     
-    # Write outputs to GITHUB_OUTPUT file
-    echo "$results" >> "$GITHUB_OUTPUT"
-    
-    # Extract values for display
-    validation_status=$(echo "$results" | grep "^validation_status=" | cut -d= -f2)
-    validation_passed=$(echo "$results" | grep "^validation_passed=" | cut -d= -f2)
-    critical_issues=$(echo "$results" | grep "^critical_issues=" | cut -d= -f2)
+    # Extract values for display (pipe-separated format)
+    IFS='|' read -r validation_status validation_passed critical_issues <<< "$results"
     
     # Display summary
     echo ""
