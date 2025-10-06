@@ -140,10 +140,53 @@ docs(readme): add troubleshooting section
 
 ## Release Process
 
-1. Update CHANGELOG.md
-2. Update version in documentation
-3. Create GitHub release with tag
-4. Publish to GitHub Marketplace
+Releases are automated using [release-please](https://github.com/google-github-actions/release-please-action):
+
+### How It Works
+
+1. **Commit with conventional commits** to `main` branch
+   - `feat:` triggers minor version bump (0.1.0 → 0.2.0)
+   - `fix:` triggers patch version bump (0.1.0 → 0.1.1)
+   - `feat!:` or `BREAKING CHANGE:` triggers major version bump (0.x.x → 1.0.0)
+
+2. **Release-please creates/updates a release PR**
+   - Automatically generates CHANGELOG.md
+   - Updates version references
+   - Groups commits by type
+   - **PR is created automatically after commits are pushed to main**
+
+3. **Merge the release PR**
+   - Creates a GitHub release with tag (e.g., `v0.1.0`)
+   - GitHub Marketplace **automatically** detects the tag and updates
+   - Tag follows format: `v0.1.0`
+
+### Initial Marketplace Setup (One-Time)
+
+The action must be published to GitHub Marketplace initially:
+
+1. Go to repository → Releases
+2. Click "Draft a new release"
+3. Create tag `v0.1.0` targeting `main` branch
+4. Check "Publish this Action to the GitHub Marketplace"
+5. Fill in required marketplace details
+6. Publish release
+
+**After initial setup**, all future releases via release-please automatically update the marketplace listing.
+
+### Manual Release Steps
+
+If needed, maintainers can manually:
+
+1. Review the auto-generated release PR
+2. Edit CHANGELOG.md if needed
+3. Merge the release PR
+4. GitHub Actions handles the rest
+
+### Version Strategy
+
+- **Major** (x.0.0): Breaking changes, requires user action
+- **Minor** (1.x.0): New features, backward compatible
+- **Patch** (1.0.x): Bug fixes, backward compatible
 
 ## Getting Help
 

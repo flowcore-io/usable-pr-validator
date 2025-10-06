@@ -48,6 +48,7 @@ git diff origin/{{BASE_BRANCH}}...{{HEAD_BRANCH}}
 ```
 
 [See templates/ directory for complete examples]
+
 ```
 
 ### Step 2: Add GitHub Secrets
@@ -262,6 +263,7 @@ Your prompt should instruct the AI to output this structure:
 ### What is Usable?
 
 Usable is a team knowledge base and memory system that stores your:
+
 - Coding standards and conventions
 - Architecture patterns and decisions
 - Security requirements and best practices
@@ -277,6 +279,7 @@ Usable is a team knowledge base and memory system that stores your:
    - Create a new token with `fragments.read` permission
 
 2. **Add GitHub Secrets**
+
    ```bash
    # In your repo: Settings → Secrets → Actions
    USABLE_API_TOKEN=your_usable_token_here
@@ -284,6 +287,7 @@ Usable is a team knowledge base and memory system that stores your:
    ```
 
 3. **Configure Workflow**
+
    ```yaml
    - uses: flowcore-io/usable-pr-validator@v1
      with:
@@ -296,6 +300,7 @@ Usable is a team knowledge base and memory system that stores your:
    > **Note**: Usable MCP integration is always enabled and uses `https://usable.dev/api/mcp` by default. You can customize the server URL with the `mcp-server-url` input if needed.
 
 4. **Update Prompt to Use Usable**
+
    ```markdown
    ### Fetch Standards from Usable
    
@@ -340,11 +345,13 @@ permissions:
 **Symptom**: Action fails before running Gemini
 
 **Causes**:
+
 - Prompt file not found
 - Missing required secrets
 - Invalid MCP configuration
 
 **Solution**:
+
 ```bash
 # Check prompt file exists
 ls -la .github/prompts/
@@ -360,6 +367,7 @@ ls -la .github/prompts/
 **Cause**: AI didn't follow output format instructions
 
 **Solution**: Strengthen prompt instructions:
+
 ```markdown
 ## CRITICAL OUTPUT INSTRUCTION
 **YOU MUST START WITH:** `# PR Validation Report`
@@ -371,6 +379,7 @@ DO NOT include thinking process or explanations!
 **Symptom**: 429 errors from Gemini API
 
 **Solution**:
+
 - Use Vertex AI (higher limits)
 - Increase `max-retries`
 - Add exponential backoff
@@ -381,6 +390,7 @@ DO NOT include thinking process or explanations!
 **Symptom**: Can't connect to MCP server
 
 **Solutions**:
+
 ```yaml
 # 1. Verify URL is correct
 mcp-server-url: 'https://correct-url.com/api/mcp'
@@ -407,13 +417,48 @@ curl -H "Authorization: Bearer $TOKEN" $MCP_URL
 ### MCP Costs
 
 MCP server costs vary by provider:
+
 - **Usable**: Check pricing at usable.dev
 - **Self-hosted**: Server infrastructure costs
 - **Confluence**: Included in license
 
+## 🔖 Versioning
+
+This action follows [Semantic Versioning](https://semver.org/) and uses automated releases via [release-please](https://github.com/google-github-actions/release-please-action).
+
+### Using Specific Versions
+
+```yaml
+# Major version (recommended - gets latest compatible updates)
+- uses: flowcore/usable-pr-validator@v0
+
+# Specific version (pinned)
+- uses: flowcore/usable-pr-validator@v0.2.3
+
+# Latest commit on main (not recommended for production)
+- uses: flowcore/usable-pr-validator@main
+```
+
+### Version Strategy
+
+- **Major (v0.x.x → v1.x.x)**: Breaking changes requiring user action
+- **Minor (v0.1.x → v0.2.x)**: New features, may have breaking changes in 0.x
+- **Patch (v0.1.0 → v0.1.1)**: Bug fixes, backward compatible
+
+We recommend using the major version tag (e.g., `@v0`) to automatically receive compatible updates.
+
+> **Note**: We're currently in 0.x (pre-1.0) development. The API may change between minor versions. Pin to specific versions if stability is critical.
+
 ## 🤝 Contributing
 
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+All commits must follow [Conventional Commits](https://www.conventionalcommits.org/) for automated releases:
+
+- `feat:` for new features
+- `fix:` for bug fixes
+- `docs:` for documentation
+- `feat!:` or `BREAKING CHANGE:` for breaking changes
 
 ### Development Setup
 
