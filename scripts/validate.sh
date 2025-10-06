@@ -190,9 +190,9 @@ main() {
     echo "::error::Validation execution failed"
     
     # Set failed outputs
-    echo "validation_status=failed" >> $GITHUB_OUTPUT
-    echo "validation_passed=false" >> $GITHUB_OUTPUT
-    echo "critical_issues=1" >> $GITHUB_OUTPUT
+    echo "validation_status=failed" >> "$GITHUB_OUTPUT"
+    echo "validation_passed=false" >> "$GITHUB_OUTPUT"
+    echo "critical_issues=1" >> "$GITHUB_OUTPUT"
     
     exit 1
   fi
@@ -216,12 +216,18 @@ main() {
   
   # Parse results and set outputs
   echo "Parsing validation results..."
-  parse_results "/tmp/validation-report.md"
   
   # Set GitHub outputs
   if [ -f "/tmp/validation-report.md" ]; then
     results=$(parse_results "/tmp/validation-report.md")
-    echo "$results" >> $GITHUB_OUTPUT
+    
+    # Write outputs to GITHUB_OUTPUT file
+    echo "$results" >> "$GITHUB_OUTPUT"
+    
+    # Extract values for display
+    validation_status=$(echo "$results" | grep "^validation_status=" | cut -d= -f2)
+    validation_passed=$(echo "$results" | grep "^validation_passed=" | cut -d= -f2)
+    critical_issues=$(echo "$results" | grep "^critical_issues=" | cut -d= -f2)
     
     # Display summary
     echo ""
@@ -231,8 +237,8 @@ main() {
     cat "/tmp/validation-report.md" | head -50
     echo ""
     echo "================================"
-    echo "Status: $(echo "$results" | grep validation_status | cut -d= -f2)"
-    echo "Critical Issues: $(echo "$results" | grep critical_issues | cut -d= -f2)"
+    echo "Status: $validation_status"
+    echo "Critical Issues: $critical_issues"
     echo "================================"
   else
     echo "::error::Report file not generated"
