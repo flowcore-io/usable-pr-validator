@@ -176,12 +176,20 @@ parse_results() {
     critical_issues=1
   fi
   
-  # Write directly to GitHub outputs
+  # Write outputs using heredoc delimiter (multiline-safe, prevents injection)
   {
-    echo "validation_status=${validation_status}"
-    echo "validation_passed=${validation_passed}"
-    echo "critical_issues=${critical_issues}"
+    echo "validation_status<<EOF"
+    echo "$validation_status"
+    echo "EOF"
+    echo "validation_passed<<EOF"
+    echo "$validation_passed"
+    echo "EOF"
+    echo "critical_issues<<EOF"
+    echo "$critical_issues"
+    echo "EOF"
   } >> "$GITHUB_OUTPUT"
+  
+  echo "✅ Outputs written successfully"
   
   # Export for display
   echo "$validation_status|$validation_passed|$critical_issues"
@@ -199,11 +207,20 @@ main() {
   if ! run_gemini "$prompt_with_replacements"; then
     echo "::error::Validation execution failed"
     
-    # Set failed outputs
-    echo "validation_status=failed" >> "$GITHUB_OUTPUT"
-    echo "validation_passed=false" >> "$GITHUB_OUTPUT"
-    echo "critical_issues=1" >> "$GITHUB_OUTPUT"
+    # Set failed outputs using heredoc delimiter
+    {
+      echo "validation_status<<EOF"
+      echo "error"
+      echo "EOF"
+      echo "validation_passed<<EOF"
+      echo "false"
+      echo "EOF"
+      echo "critical_issues<<EOF"
+      echo "0"
+      echo "EOF"
+    } >> "$GITHUB_OUTPUT"
     
+    echo "❌ Outputs set to error state"
     exit 1
   fi
   
@@ -248,6 +265,21 @@ main() {
     echo "================================"
   else
     echo "::error::Report file not generated"
+    
+    # Set error outputs using heredoc delimiter
+    {
+      echo "validation_status<<EOF"
+      echo "error"
+      echo "EOF"
+      echo "validation_passed<<EOF"
+      echo "false"
+      echo "EOF"
+      echo "critical_issues<<EOF"
+      echo "0"
+      echo "EOF"
+    } >> "$GITHUB_OUTPUT"
+    
+    echo "❌ Outputs set to error state (no report)"
     exit 1
   fi
   
