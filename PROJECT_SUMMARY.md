@@ -1,9 +1,9 @@
-# AI-Powered PR Validator - Implementation Summary
+# Usable PR Validator - Implementation Summary
 
 ## 📋 Project Overview
 
-**Repository**: `/Users/julius/git/flowcore/ai-pr-validator`  
-**PRD**: AI-Powered PR Validator - GitHub Action Marketplace PRD v1.0  
+**Repository**: `/Users/julius/git/flowcore/usable-pr-validator`  
+**PRD**: Usable PR Validator - GitHub Action Marketplace PRD v1.0  
 **Status**: ✅ MVP Implementation Complete  
 **Date**: January 6, 2025
 
@@ -14,7 +14,7 @@ A complete GitHub Actions composite action that validates Pull Requests against 
 ## 📁 Repository Structure
 
 ```
-ai-pr-validator/
+usable-pr-validator/
 ├── action.yml                    # Main action metadata & composite workflow
 ├── README.md                     # Comprehensive documentation
 ├── LICENSE                       # MIT License
@@ -158,7 +158,7 @@ fi
 ## 🚀 Next Steps
 
 ### Immediate (Ready for Use)
-1. ✅ **Repository Created**: `/Users/julius/git/flowcore/ai-pr-validator`
+1. ✅ **Repository Created**: `/Users/julius/git/flowcore/usable-pr-validator`
 2. ⏳ **Create GitHub Repository**: Push to GitHub under flowcore org
 3. ⏳ **Test with Real PR**: Validate end-to-end with actual Gemini credentials
 4. ⏳ **Document in Usable**: Create knowledge fragments for future reference
@@ -211,7 +211,7 @@ jobs:
         with:
           fetch-depth: 0
       
-      - uses: flowcore/ai-pr-validator@v1
+      - uses: flowcore/usable-pr-validator@v1
         with:
           prompt-file: '.github/prompts/pr-validation.md'
         env:

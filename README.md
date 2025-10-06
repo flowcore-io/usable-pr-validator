@@ -1,14 +1,16 @@
-# 🤖 AI-Powered PR Validator
+# 🤖 Usable PR Validator
 
-> Validate Pull Requests against custom standards using Google Gemini AI and optional MCP knowledge base integration
+> Validate Pull Requests against your Usable knowledge base standards using Google Gemini AI
 
-[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-AI--Powered%20PR%20Validator-blue?logo=github)](https://github.com/marketplace/actions/ai-powered-pr-validator)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Usable%20PR%20Validator-blue?logo=github)](https://github.com/marketplace/actions/usable-pr-validator)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Powered by Usable](https://img.shields.io/badge/Powered%20by-Usable-6366f1)](https://usable.dev)
 
 ## ✨ Features
 
 - 🧠 **AI-Powered Validation**: Uses Google Gemini to understand context and architectural patterns
-- 📚 **Knowledge Base Integration**: Optional MCP server support for living documentation
+- 📚 **Usable Integration**: Validate PRs against your team's knowledge base stored in Usable
+- 🔌 **MCP Protocol**: Connects directly to Usable's MCP server for real-time standards
 - ⚙️ **Highly Configurable**: Customizable prompts, severity levels, and validation rules
 - 🔄 **Reliable**: Automatic retry logic with exponential backoff for API failures
 - 💬 **Smart PR Comments**: Updates existing comments to avoid spam
@@ -79,7 +81,7 @@ jobs:
         with:
           fetch-depth: 0
       
-      - uses: flowcore/ai-pr-validator@v1
+      - uses: flowcore/usable-pr-validator@v1
         with:
           prompt-file: '.github/prompts/pr-validation.md'
         env:
@@ -120,7 +122,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 ### Minimal Setup
 
 ```yaml
-- uses: flowcore/ai-pr-validator@v1
+- uses: flowcore/usable-pr-validator@v1
   with:
     prompt-file: '.github/prompts/validate.md'
   env:
@@ -130,7 +132,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 ### With MCP Knowledge Base
 
 ```yaml
-- uses: flowcore/ai-pr-validator@v1
+- uses: flowcore/usable-pr-validator@v1
   with:
     prompt-file: '.github/prompts/validate.md'
     mcp-enabled: true
@@ -143,7 +145,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 ### Advanced Configuration
 
 ```yaml
-- uses: flowcore/ai-pr-validator@v1
+- uses: flowcore/usable-pr-validator@v1
   with:
     prompt-file: '.github/validation/standards.md'
     gemini-model: 'gemini-2.5-pro'
@@ -171,7 +173,7 @@ jobs:
         with:
           fetch-depth: 0
       
-      - uses: flowcore/ai-pr-validator@v1
+      - uses: flowcore/usable-pr-validator@v1
         with:
           prompt-file: '.github/prompts/backend-standards.md'
         env:
@@ -184,7 +186,7 @@ jobs:
         with:
           fetch-depth: 0
       
-      - uses: flowcore/ai-pr-validator@v1
+      - uses: flowcore/usable-pr-validator@v1
         with:
           prompt-file: '.github/prompts/frontend-standards.md'
         env:
@@ -241,41 +243,53 @@ Your prompt should instruct the AI to output this structure:
 - **Suggestions**: [count]
 ```
 
-## 🔌 MCP Integration
+## 🔌 Usable Integration
 
-### What is MCP?
+### What is Usable?
 
-Model Context Protocol (MCP) allows AI to access external knowledge bases like:
-- Usable (usable.dev)
-- Internal wikis (Confluence, Notion)
-- Custom documentation systems
+Usable is a team knowledge base and memory system that stores your:
+- Coding standards and conventions
+- Architecture patterns and decisions
+- Security requirements and best practices
+- Project-specific documentation
+
+This action connects to your Usable workspace via MCP (Model Context Protocol) to validate PRs against your living documentation.
 
 ### Setup
 
-1. **Get MCP Server URL and Token**
-   - For Usable: https://usable.dev/api/mcp
-   - For custom: Deploy your own MCP server
+1. **Get Your Usable API Token**
+   - Go to [usable.dev](https://usable.dev)
+   - Navigate to Settings → API Tokens
+   - Create a new token with `fragments.read` permission
 
-2. **Add Secrets**
-   ```
-   MCP_API_TOKEN=your_token_here
+2. **Add GitHub Secrets**
+   ```bash
+   # In your repo: Settings → Secrets → Actions
+   USABLE_API_TOKEN=your_usable_token_here
+   GEMINI_SERVICE_ACCOUNT_KEY=base64_encoded_key_here
    ```
 
 3. **Enable in Workflow**
    ```yaml
-   with:
-     mcp-enabled: true
-     mcp-server-url: 'https://usable.dev/api/mcp'
+   - uses: flowcore-io/usable-pr-validator@v1
+     with:
+       prompt-file: '.github/prompts/pr-validation.md'
+       mcp-enabled: true
+       mcp-server-url: 'https://usable.dev/api/mcp'
+     env:
+       GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+       MCP_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
    ```
 
-4. **Update Prompt to Use MCP**
+4. **Update Prompt to Use Usable**
    ```markdown
-   ### Fetch Standards from Knowledge Base
+   ### Fetch Standards from Usable
    
-   Use agentic-search-fragments to find:
+   Use agentic-search-fragments to find relevant standards:
    - Coding standards for {{BASE_BRANCH}}
    - Architecture patterns
    - Security requirements
+   - repo:your-repo-name tag
    
    Use get-memory-fragment-content for full details.
    ```
@@ -390,8 +404,8 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ### Development Setup
 
 ```bash
-git clone https://github.com/flowcore/ai-pr-validator.git
-cd ai-pr-validator
+git clone https://github.com/flowcore/usable-pr-validator.git
+cd usable-pr-validator
 
 # Test locally (requires act)
 act pull_request -s GEMINI_SERVICE_ACCOUNT_KEY="$(cat key.json | base64)"
@@ -409,9 +423,9 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## 📞 Support
 
-- 🐛 [Report a bug](https://github.com/flowcore/ai-pr-validator/issues)
-- 💡 [Request a feature](https://github.com/flowcore/ai-pr-validator/issues)
-- 💬 [Discussions](https://github.com/flowcore/ai-pr-validator/discussions)
+- 🐛 [Report a bug](https://github.com/flowcore/usable-pr-validator/issues)
+- 💡 [Request a feature](https://github.com/flowcore/usable-pr-validator/issues)
+- 💬 [Discussions](https://github.com/flowcore/usable-pr-validator/discussions)
 
 ---
 

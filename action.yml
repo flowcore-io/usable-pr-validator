@@ -1,5 +1,5 @@
-name: 'AI-Powered PR Validator'
-description: 'Validate Pull Requests against custom standards using Google Gemini AI and optional MCP knowledge base integration'
+name: 'Usable PR Validator'
+description: 'Validate Pull Requests against your Usable knowledge base standards using Google Gemini AI and Usable MCP integration'
 author: 'Flowcore'
 
 branding:
@@ -25,11 +25,11 @@ inputs:
   mcp-server-url:
     description: 'HTTP URL of MCP server (required if mcp-enabled is true)'
     required: false
-    default: ''
+    default: 'https://usable.dev/api/mcp'
   mcp-token-secret:
-    description: 'Name of secret containing MCP server API token'
+    description: 'Name of secret containing Usable API token'
     required: false
-    default: 'MCP_API_TOKEN'
+    default: 'USABLE_API_TOKEN'
   fail-on-critical:
     description: 'Fail build when critical violations are found'
     required: false
@@ -180,7 +180,7 @@ runs:
           }
           
           const report = fs.readFileSync(reportPath, 'utf8');
-          const marker = '<!-- ai-pr-validator -->';
+          const marker = '<!-- usable-pr-validator -->';
           
           const commentBody = marker + '\n## 🤖 Automated Standards Validation\n\n' + 
             report + '\n\n---\n<details>\n<summary>📊 Validation Statistics</summary>\n\n' +

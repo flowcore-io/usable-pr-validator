@@ -1,4 +1,4 @@
-# Contributing to AI-Powered PR Validator
+# Contributing to Usable PR Validator
 
 Thank you for your interest in contributing! 🎉
 
@@ -10,7 +10,7 @@ Be respectful, inclusive, and constructive in all interactions.
 
 ### Reporting Bugs
 
-1. Check if the bug has already been reported in [Issues](https://github.com/flowcore/ai-pr-validator/issues)
+1. Check if the bug has already been reported in [Issues](https://github.com/flowcore/usable-pr-validator/issues)
 2. If not, create a new issue with:
    - Clear title and description
    - Steps to reproduce
@@ -20,7 +20,7 @@ Be respectful, inclusive, and constructive in all interactions.
 
 ### Suggesting Features
 
-1. Check [existing feature requests](https://github.com/flowcore/ai-pr-validator/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement)
+1. Check [existing feature requests](https://github.com/flowcore/usable-pr-validator/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement)
 2. Create a new issue with:
    - Clear use case description
    - Proposed solution
@@ -75,8 +75,8 @@ Be respectful, inclusive, and constructive in all interactions.
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/ai-pr-validator.git
-cd ai-pr-validator
+git clone https://github.com/YOUR_USERNAME/usable-pr-validator.git
+cd usable-pr-validator
 
 # Create a test PR in a repo
 # Add secrets to test environment
@@ -147,8 +147,8 @@ docs(readme): add troubleshooting section
 
 ## Getting Help
 
-- 💬 [Discussions](https://github.com/flowcore/ai-pr-validator/discussions)
-- 🐛 [Issues](https://github.com/flowcore/ai-pr-validator/issues)
+- 💬 [Discussions](https://github.com/flowcore/usable-pr-validator/discussions)
+- 🐛 [Issues](https://github.com/flowcore/usable-pr-validator/issues)
 
 ## License
 

@@ -45,7 +45,7 @@ jobs:
           echo "✅ action.yml is valid YAML"
           
           # Check required fields
-          if ! yq eval '.name' action.yml | grep -q "AI-Powered PR Validator"; then
+          if ! yq eval '.name' action.yml | grep -q "Usable PR Validator"; then
             echo "::error::Missing or invalid 'name' field"
             exit 1
           fi

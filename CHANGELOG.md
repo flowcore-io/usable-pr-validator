@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial implementation of AI-Powered PR Validator
+- Initial implementation of Usable PR Validator
 - Google Gemini integration via Vertex AI
 - Composite GitHub Action with full configuration
 - Prompt placeholder replacement system
