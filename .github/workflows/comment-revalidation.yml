@@ -112,9 +112,9 @@ jobs:
             core.setOutput('head-ref', pr.data.head.ref);
             core.setOutput('head-sha', pr.data.head.sha);
             
-            console.log(`PR #${context.issue.number}`);
-            console.log(`Base: ${pr.data.base.ref}`);
-            console.log(`Head: ${pr.data.head.ref} (${pr.data.head.sha})`);
+            core.info(`PR #${context.issue.number}`);
+            core.info(`Base: ${pr.data.base.ref}`);
+            core.info(`Head: ${pr.data.head.ref} (${pr.data.head.sha})`);
       
       - name: Checkout PR
         uses: actions/checkout@v4

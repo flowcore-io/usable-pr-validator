@@ -100,6 +100,7 @@ run_gemini() {
     echo ""
     
     # Run Gemini CLI and stream output while saving to file
+    # Using tee to display real-time output within the group while also saving to file
     if gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md; then
       echo "::endgroup::"
       echo "✅ Validation completed successfully"

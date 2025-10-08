@@ -101,6 +101,12 @@ fetch_mcp_system_prompt() {
     content="$body"
   fi
   
+  # Verify content is not empty after parsing
+  if [ -z "$content" ]; then
+    echo "::warning::MCP system prompt content is empty after parsing."
+    return 1
+  fi
+  
   echo "$content"
 }
 
