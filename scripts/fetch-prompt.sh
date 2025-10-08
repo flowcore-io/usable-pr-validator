@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 echo "::group::Preparing Prompts for Validation"
@@ -138,9 +138,7 @@ main() {
   if [ "$USE_DYNAMIC_PROMPTS" = "true" ]; then
     # Dynamic prompts - fetch from Usable API
     if [ -z "$PROMPT_FRAGMENT_ID" ]; then
-      echo "::error::prompt-fragment-id is required when use-dynamic-prompts is enabled"
-      echo "Please provide a valid Usable fragment UUID via the prompt-fragment-id input"
-      echo "Example: prompt-fragment-id: 'a859c565-ddb9-4d3e-b716-4b644b08e161'"
+      echo "::error::prompt-fragment-id is required when use-dynamic-prompts is enabled. Provide a valid Usable fragment UUID (e.g., 'a859c565-ddb9-4d3e-b716-4b644b08e161')"
       exit 1
     fi
     
