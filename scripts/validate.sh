@@ -69,12 +69,20 @@ run_gemini() {
     echo "Prompt file size: $(wc -c < "$prompt_file") bytes"
     echo "Prompt file lines: $(wc -l < "$prompt_file") lines"
     
-    # Run Gemini CLI using --prompt flag instead of stdin
-    if gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" > /tmp/validation-full-output.md 2>&1; then
+    # Show the command being executed
+    echo "::group::🤖 Running Gemini CLI"
+    echo "Command: gemini -y -m $GEMINI_MODEL --prompt <prompt-content>"
+    echo "Model: $GEMINI_MODEL"
+    echo ""
+    
+    # Run Gemini CLI and stream output while saving to file
+    if gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md; then
+      echo "::endgroup::"
       echo "✅ Validation completed successfully"
       return 0
     else
       exit_code=$?
+      echo "::endgroup::"
       echo "⚠️ Gemini CLI exited with code: $exit_code"
       
       # Check if it's a retryable error
@@ -92,7 +100,9 @@ run_gemini() {
       else
         # Non-retryable error
         echo "::error::Non-retryable error occurred"
+        echo "::group::❌ Gemini CLI Error Output"
         cat /tmp/validation-full-output.md
+        echo "::endgroup::"
         return 1
       fi
     fi
