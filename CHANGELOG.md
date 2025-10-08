@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0](https://github.com/flowcore-io/usable-pr-validator/compare/v1.1.0...v1.2.0) (2025-10-08)
+
+
+### Features
+
+* **action:** :sparkles: enhance action inputs for dynamic prompt fetching and validation ([21cf10c](https://github.com/flowcore-io/usable-pr-validator/commit/21cf10c07350937b54a76f42cd47d0456b8db867))
+* **comment-revalidation:** add support for comment-triggered revalidation and override handling in workflows and scripts ([7860dee](https://github.com/flowcore-io/usable-pr-validator/commit/7860dee10e4792be60a0fbee6d9af2602781d5dc))
+* **workflow:** add logic to determine validation base reference for release-please branches ([ebfb323](https://github.com/flowcore-io/usable-pr-validator/commit/ebfb3233738d72f98513b23bc719e7e682c012fb))
+
+
+### Bug Fixes
+
+* **action:** improve base reference handling in Git fetch logic and update diff commands for better compatibility with branches and tags ([51f5721](https://github.com/flowcore-io/usable-pr-validator/commit/51f57210a329b7632f0f5eddb1c92ef209113ed8))
+* **fetch-prompt:** streamline variable declarations and improve readability in fetch functions ([4a1f10c](https://github.com/flowcore-io/usable-pr-validator/commit/4a1f10ce4747976405c76e0e5ae4cc6f67d8712a))
+* **scripts:** update shebang to use env for portability and improve error message clarity in fetch-prompt script ([b290c29](https://github.com/flowcore-io/usable-pr-validator/commit/b290c29f78b92ff7a1036199662d55edb41e98b4))
+* **validate:** enhance Gemini CLI execution logging and output handling in validation script ([1251ea9](https://github.com/flowcore-io/usable-pr-validator/commit/1251ea9c0e5ad7e5fe68778c109293b820a89d19))
+* **workflow:** replace console.log with core.info for improved logging in comment revalidation workflow; add warning for empty MCP system prompt content in fetch-prompt script; enhance logging in validate script for real-time output display ([fc36d88](https://github.com/flowcore-io/usable-pr-validator/commit/fc36d88caa7c8100e1e20cb8cab1e881cf38d27a))
+
 ## [1.1.0](https://github.com/flowcore-io/usable-pr-validator/compare/v1.0.0...v1.1.0) (2025-10-06)
 
 
