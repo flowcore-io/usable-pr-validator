@@ -23,12 +23,14 @@ Analyze the changes in this PR and validate against project standards.
 
 Run the following command to see what changed:
 ```bash
-git diff origin/{{BASE_BRANCH}}...{{HEAD_BRANCH}}
+# Compare base ref (branch or tag) with HEAD
+# If BASE_BRANCH is a tag, use it directly; if it's a branch, try origin/ prefix
+git diff {{BASE_BRANCH}}...HEAD 2>/dev/null || git diff origin/{{BASE_BRANCH}}...HEAD
 ```
 
 You can also see the list of changed files:
 ```bash
-git diff --name-only origin/{{BASE_BRANCH}}...{{HEAD_BRANCH}}
+git diff --name-only {{BASE_BRANCH}}...HEAD 2>/dev/null || git diff --name-only origin/{{BASE_BRANCH}}...HEAD
 ```
 
 ### Validation Criteria
