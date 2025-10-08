@@ -11,6 +11,8 @@
 - 🧠 **AI-Powered Validation**: Uses Google Gemini to understand context and architectural patterns
 - 📚 **Usable Integration**: Validate PRs against your team's knowledge base stored in Usable
 - 🔌 **MCP Protocol**: Connects directly to Usable's MCP server for real-time standards
+- 🎯 **System Prompts**: Organization-wide validation standards fetched from Usable and auto-merged
+- 🚀 **Dynamic Prompts**: Fetch latest validation prompts from Usable API (no static files needed!)
 - ⚙️ **Highly Configurable**: Customizable prompts, severity levels, and validation rules
 - 🔄 **Reliable**: Automatic retry logic with exponential backoff for API failures
 - 💬 **Smart PR Comments**: Updates existing comments to avoid spam
@@ -87,6 +89,7 @@ jobs:
       - uses: flowcore/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/pr-validation.md'
+          workspace-id: 'your-workspace-uuid'
         env:
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
@@ -100,21 +103,92 @@ That's it! Your PRs will now be validated automatically. 🎉
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `prompt-file` | Path to validation prompt markdown file | ✅ Yes | - |
-| `gemini-model` | Gemini model to use (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.5-pro`) | No | `gemini-2.5-flash` |
-| `service-account-key-secret` | Secret name for service account key | No | `GEMINI_SERVICE_ACCOUNT_KEY` |
-| `mcp-server-url` | Usable MCP server URL | No | `https://usable.dev/api/mcp` |
-| `mcp-token-secret` | Secret name for Usable API token | No | `USABLE_API_TOKEN` |
-| `fail-on-critical` | Fail build on critical violations | No | `true` |
-| `comment-mode` | PR comment behavior (`update`/`new`/`none`) | No | `update` |
-| `comment-title` | Title for PR comment (for multi-stage validation) | No | `Automated Standards Validation` |
-| `artifact-retention-days` | Days to retain reports | No | `30` |
-| `max-retries` | Maximum retry attempts | No | `2` |
-| `timeout-minutes` | Maximum execution time in minutes | No | `15` |
-| `base-ref` | Base reference for diff comparison. Useful for release-please branches to compare against last release tag instead of base branch. | No | PR base branch |
-| `head-ref` | Head reference for diff comparison | No | PR head branch |
+| `prompt-file` | Path to validation prompt markdown file (optional if `use-dynamic-prompts` is enabled) | | |
+| `use-dynamic-prompts` | Fetch latest prompt from Usable API instead of using static file | | `false` |
+| `prompt-fragment-id` | Usable fragment UUID to use as prompt (required when `use-dynamic-prompts` is `true`) | ✓ (with dynamic prompts) | |
+| `workspace-id` | Usable workspace UUID (required - used to fetch MCP system prompt) | ✓ | |
+| `merge-custom-prompt` | Merge fetched Usable prompt with custom `prompt-file` (only when both are provided) | | `true` |
+| `gemini-model` | Gemini model to use (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.5-pro`) | | `gemini-2.5-flash` |
+| `service-account-key-secret` | Secret name for service account key | | `GEMINI_SERVICE_ACCOUNT_KEY` |
+| `mcp-server-url` | Usable MCP server URL | | `https://usable.dev/api/mcp` |
+| `mcp-token-secret` | Secret name for Usable API token | | `USABLE_API_TOKEN` |
+| `fail-on-critical` | Fail build on critical violations | | `true` |
+| `comment-mode` | PR comment behavior (`update`/`new`/`none`) | | `update` |
+| `comment-title` | Title for PR comment (for multi-stage validation) | | `Automated Standards Validation` |
+| `artifact-retention-days` | Days to retain reports | | `30` |
+| `max-retries` | Maximum retry attempts | | `2` |
+| `timeout-minutes` | Maximum execution time in minutes | | `15` |
+| `base-ref` | Base reference for diff comparison. Useful for release-please branches to compare against last release tag instead of base branch. | | PR base branch |
+| `head-ref` | Head reference for diff comparison | | PR head branch |
 
 > **Note**: You must set the `USABLE_API_TOKEN` secret (or the custom secret name specified in `mcp-token-secret`). Usable MCP integration is required for this action.
+
+### 🧠 System Prompts (Automatic)
+
+The action **automatically** includes system prompts to ensure high-quality validations. The final prompt is assembled in this order:
+
+1. **Action System Prompt** (hardcoded in `system-prompt.md`)
+   - Critical guidelines (no hallucination, verify file contents)
+   - Output format requirements
+   - Severity definitions
+   - Usable MCP integration instructions
+
+2. **Workspace MCP System Prompt** (fetched from Usable API)
+   - Your workspace-specific Usable MCP guidelines
+   - Fetched from `/api/workspaces/{workspace-id}/mcp-system-prompt`
+   - Defines how to search and use your knowledge base
+
+3. **User Prompt** (your validation rules)
+   - Repository-specific validation criteria
+   - Can be a static file or dynamic from Usable
+
+This three-layer approach ensures:
+
+- ✅ Consistent validation behavior across all repositories
+- ✅ Proper Usable MCP integration
+- ✅ Accurate, hallucination-free reports
+- ✅ Flexibility for repo-specific rules
+
+### 🚀 Dynamic Prompts
+
+Instead of maintaining static prompt files, you can now fetch prompts dynamically from your Usable workspace. This ensures you're always using the latest validation standards without manual updates.
+
+**Benefits:**
+
+- ✅ Always use the latest validation best practices
+- ✅ Reduced setup complexity - no prompt file needed
+- ✅ Automatic updates when your team's standards evolve
+- ✅ Centralized prompt management in Usable
+
+**How it works:**
+
+1. Enable `use-dynamic-prompts: true`
+2. Provide the `prompt-fragment-id` with your Usable fragment UUID
+3. The action fetches that specific prompt from your Usable workspace
+4. Automatically merges with system prompts (action + MCP)
+
+**Examples:**
+
+```yaml
+# Dynamic user prompt from Usable
+- uses: flowcore/usable-pr-validator@latest
+  with:
+    use-dynamic-prompts: true
+    prompt-fragment-id: 'user-prompt-uuid'
+    workspace-id: 'your-workspace-uuid'
+  env:
+    GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+    USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+
+# Static user prompt file (most common)
+- uses: flowcore/usable-pr-validator@latest
+  with:
+    prompt-file: '.github/prompts/pr-validation.md'
+    workspace-id: 'your-workspace-uuid'
+  env:
+    GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+    USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+```
 
 ### Outputs
 
@@ -133,6 +207,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 - uses: flowcore/usable-pr-validator@latest
   with:
     prompt-file: '.github/prompts/validate.md'
+    workspace-id: 'your-workspace-uuid'
   env:
     GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
@@ -144,6 +219,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 - uses: flowcore/usable-pr-validator@latest
   with:
     prompt-file: '.github/prompts/validate.md'
+    workspace-id: 'your-workspace-uuid'
     mcp-server-url: 'https://your-custom-mcp.com/api/mcp'
     mcp-token-secret: 'YOUR_CUSTOM_TOKEN'
   env:
@@ -157,6 +233,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 - uses: flowcore/usable-pr-validator@latest
   with:
     prompt-file: '.github/validation/standards.md'
+    workspace-id: 'your-workspace-uuid'
     gemini-model: 'gemini-2.5-pro'
     service-account-key-secret: 'MY_GEMINI_KEY'
     mcp-server-url: 'https://confluence.company.com/api/mcp'
@@ -186,6 +263,7 @@ jobs:
       - uses: flowcore/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/backend-standards.md'
+          workspace-id: 'your-workspace-uuid'
           comment-title: 'Backend Validation'  # Creates unique comment
         env:
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
@@ -201,6 +279,7 @@ jobs:
       - uses: flowcore/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/frontend-standards.md'
+          workspace-id: 'your-workspace-uuid'
           comment-title: 'Frontend Validation'  # Creates unique comment
         env:
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
@@ -246,6 +325,7 @@ jobs:
       - uses: flowcore/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/pr-validation.md'
+          workspace-id: 'your-workspace-uuid'
           base-ref: ${{ steps.base-ref.outputs.ref }}  # Custom base reference
         env:
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
@@ -334,14 +414,15 @@ Usable is a team knowledge base and memory system that stores your:
 
 3. **Configure Workflow**
 
-   ```yaml
-   - uses: flowcore/usable-pr-validator@latest
-     with:
-       prompt-file: '.github/prompts/pr-validation.md'
-     env:
-       GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
-       USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
-   ```
+  ```yaml
+  - uses: flowcore/usable-pr-validator@latest
+    with:
+      prompt-file: '.github/prompts/pr-validation.md'
+      workspace-id: 'your-workspace-uuid'
+    env:
+      GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+      USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+  ```
 
    > **Note**: Usable MCP integration is always enabled and uses `https://usable.dev/api/mcp` by default. You can customize the server URL with the `mcp-server-url` input if needed.
 

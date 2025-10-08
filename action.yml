@@ -8,8 +8,21 @@ branding:
 
 inputs:
   prompt-file:
-    description: 'Path to validation prompt markdown file'
-    required: true
+    description: 'Path to validation prompt markdown file (optional if use-dynamic-prompts is enabled)'
+    required: false
+    default: ''
+  use-dynamic-prompts:
+    description: 'Fetch latest prompt from Usable API instead of using static prompt file'
+    required: false
+    default: 'false'
+  prompt-fragment-id:
+    description: 'Usable fragment UUID to use as prompt (required when use-dynamic-prompts is true)'
+    required: false
+    default: ''
+  merge-custom-prompt:
+    description: 'Merge fetched Usable prompt with custom prompt-file (only when both are provided)'
+    required: false
+    default: 'true'
   gemini-model:
     description: 'Gemini model to use (gemini-2.5-flash, gemini-2.0-flash, gemini-2.5-pro)'
     required: false
@@ -26,6 +39,9 @@ inputs:
     description: 'Name of secret containing Usable API token'
     required: false
     default: 'USABLE_API_TOKEN'
+  workspace-id:
+    description: 'Usable workspace UUID (required - used to fetch MCP system prompt)'
+    required: true
   fail-on-critical:
     description: 'Fail build when critical violations are found'
     required: false
@@ -81,14 +97,20 @@ runs:
       run: |
         echo "::group::Validating inputs"
         
-        # Check if prompt file path is provided
-        if [ -z "${{ inputs.prompt-file }}" ]; then
-          echo "::error::prompt-file is required"
+        # Check if workspace-id is provided
+        if [ -z "${{ inputs.workspace-id }}" ]; then
+          echo "::error::workspace-id is required"
           exit 1
         fi
         
-        # Check if prompt file exists
-        if [ ! -f "${{ inputs.prompt-file }}" ]; then
+        # Check if either prompt-file or use-dynamic-prompts is provided
+        if [ -z "${{ inputs.prompt-file }}" ] && [ "${{ inputs.use-dynamic-prompts }}" != "true" ]; then
+          echo "::error::Either prompt-file must be provided or use-dynamic-prompts must be enabled"
+          exit 1
+        fi
+        
+        # Check if prompt file exists (only if provided)
+        if [ -n "${{ inputs.prompt-file }}" ] && [ ! -f "${{ inputs.prompt-file }}" ]; then
           echo "::error::Prompt file not found: ${{ inputs.prompt-file }}"
           exit 1
         fi
@@ -96,6 +118,17 @@ runs:
         # Validate comment mode
         if [[ ! "${{ inputs.comment-mode }}" =~ ^(update|new|none)$ ]]; then
           echo "::error::Invalid comment-mode. Must be: update, new, or none"
+          exit 1
+        fi
+        
+        # Validate boolean inputs
+        if [[ ! "${{ inputs.use-dynamic-prompts }}" =~ ^(true|false)$ ]]; then
+          echo "::error::Invalid use-dynamic-prompts. Must be: true or false"
+          exit 1
+        fi
+        
+        if [[ ! "${{ inputs.merge-custom-prompt }}" =~ ^(true|false)$ ]]; then
+          echo "::error::Invalid merge-custom-prompt. Must be: true or false"
           exit 1
         fi
         
@@ -157,11 +190,25 @@ runs:
       run: |
         ${{ github.action_path }}/scripts/setup-mcp.sh
     
+    - name: Fetch Prompts from Usable
+      shell: bash
+      env:
+        USE_DYNAMIC_PROMPTS: ${{ inputs.use-dynamic-prompts }}
+        PROMPT_FRAGMENT_ID: ${{ inputs.prompt-fragment-id }}
+        WORKSPACE_ID: ${{ inputs.workspace-id }}
+        CUSTOM_PROMPT_FILE: ${{ inputs.prompt-file }}
+        MERGE_CUSTOM_PROMPT: ${{ inputs.merge-custom-prompt }}
+        MCP_SECRET_NAME: ${{ inputs.mcp-token-secret }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        ${{ github.action_path }}/scripts/fetch-prompt.sh
+    
     - name: Run Validation
       id: validate
       shell: bash
       env:
         PROMPT_FILE: ${{ inputs.prompt-file }}
+        USE_DYNAMIC_PROMPTS: ${{ inputs.use-dynamic-prompts }}
         GEMINI_MODEL: ${{ inputs.gemini-model }}
         MAX_RETRIES: ${{ inputs.max-retries }}
         PR_NUMBER: ${{ github.event.pull_request.number }}

@@ -197,9 +197,27 @@ parse_results() {
 
 # Main execution
 main() {
+  # Determine which prompt file to use
+  local actual_prompt_file=""
+  
+  # Check if fetch-prompt.sh created a merged/final prompt (takes precedence)
+  if [ -f "/tmp/dynamic-prompt.md" ]; then
+    echo "Using prompt prepared by fetch-prompt.sh (includes system prompt if configured)"
+    actual_prompt_file="/tmp/dynamic-prompt.md"
+  elif [ -n "$PROMPT_FILE" ] && [ -f "$PROMPT_FILE" ]; then
+    echo "Using static prompt file: $PROMPT_FILE"
+    actual_prompt_file="$PROMPT_FILE"
+  else
+    echo "::error::No valid prompt file found"
+    echo "  - Merged prompt exists: $([ -f "/tmp/dynamic-prompt.md" ] && echo "yes" || echo "no")"
+    echo "  - PROMPT_FILE: ${PROMPT_FILE:-not set}"
+    echo "  - Custom prompt exists: $([ -n "$PROMPT_FILE" ] && [ -f "$PROMPT_FILE" ] && echo "yes" || echo "no")"
+    exit 1
+  fi
+  
   # Prepare prompt with placeholder replacement
   echo "Preparing validation prompt..."
-  prompt_with_replacements=$(prepare_prompt "$PROMPT_FILE")
+  prompt_with_replacements=$(prepare_prompt "$actual_prompt_file")
   
   echo "Prompt prepared: $prompt_with_replacements"
   
