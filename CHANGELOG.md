@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0](https://github.com/flowcore-io/usable-pr-validator/compare/v1.0.0...v1.1.0) (2025-10-06)
+
+
+### Features
+
+* **action:** :sparkles: add base-ref and head-ref inputs for diff comparison ([ef77323](https://github.com/flowcore-io/usable-pr-validator/commit/ef7732354f5afffb01ef64c43e42dc2860552113))
+
+
+### Bug Fixes
+
+* **readme:** :memo: add a new line for better readability ([11a5399](https://github.com/flowcore-io/usable-pr-validator/commit/11a5399d4e66822284237bc4066c9b1505f9a6af))
+* **readme:** :memo: update Usable PR Validator to use latest version ([4359c42](https://github.com/flowcore-io/usable-pr-validator/commit/4359c42d2fabae977ffb3dae0da39e14a56cdea2))
+
 ## 1.0.0 (2025-10-06)
 
 
