@@ -13,6 +13,8 @@
 - 🔌 **MCP Protocol**: Connects directly to Usable's MCP server for real-time standards
 - 🎯 **System Prompts**: Organization-wide validation standards fetched from Usable and auto-merged
 - 🚀 **Dynamic Prompts**: Fetch latest validation prompts from Usable API (no static files needed!)
+- 💬 **Comment-Triggered Revalidation**: Mention `@usable` in PR comments to trigger revalidation with context
+- 📝 **Automatic Deviation Documentation**: AI creates knowledge base fragments when deviations are approved
 - ⚙️ **Highly Configurable**: Customizable prompts, severity levels, and validation rules
 - 🔄 **Reliable**: Automatic retry logic with exponential backoff for API failures
 - 💬 **Smart PR Comments**: Updates existing comments to avoid spam
@@ -426,7 +428,7 @@ Usable is a team knowledge base and memory system that stores your:
 
    > **Note**: Usable MCP integration is always enabled and uses `https://usable.dev/api/mcp` by default. You can customize the server URL with the `mcp-server-url` input if needed.
 
-4. **Update Prompt to Use Usable**
+1. **Update Prompt to Use Usable**
 
    ```markdown
    ### Fetch Standards from Usable
@@ -439,6 +441,125 @@ Usable is a team knowledge base and memory system that stores your:
    
    Use get-memory-fragment-content for full details.
    ```
+
+## 💬 Comment-Triggered Revalidation
+
+**⚡ 2-Minute Setup** - Add comment-triggered validation to any repository!
+
+### @usable Mentions
+
+Trigger revalidations and approve deviations by commenting on a PR with `@usable`:
+
+```text
+@usable This PR intentionally uses console.log in debug utilities.
+These files are specifically for debugging and need console output.
+```
+
+**What Happens**:
+
+1. ✅ The action automatically triggers a revalidation
+2. 📝 Your comment is passed to the AI validator
+3. 🧠 The AI can:
+   - **Understand the context** you've provided
+   - **Approve deviations** from standards
+   - **Document the decision** by creating a fragment in Usable
+   - **Link the fragment** in the validation report
+4. 📊 A new validation report is posted with the override applied
+
+### Setting Up Comment Revalidation
+
+Create `.github/workflows/comment-revalidation.yml`:
+
+```yaml
+name: Comment Revalidation
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  revalidate:
+    # Only run if comment is on a PR and mentions @usable
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@usable')
+    
+    # Use the reusable workflow - it handles everything!
+    uses: flowcore/usable-pr-validator/.github/workflows/comment-revalidation.yml@v1
+    with:
+      workspace-id: 'your-workspace-uuid'  # REQUIRED
+      prompt-file: '.github/prompts/pr-validation.md'  # Optional
+      # Customize as needed:
+      # use-dynamic-prompts: true
+      # prompt-fragment-id: 'fragment-uuid'
+      # gemini-model: 'gemini-2.5-flash'
+      # comment-title: '🔄 Custom Title'
+      # fail-on-critical: false
+    secrets:
+      GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+      USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+    permissions:
+      contents: read
+      pull-requests: write
+```
+
+**That's it!** Just 15 lines and you're done. The reusable workflow handles:
+
+- ✅ Extracting PR details
+- ✅ Checking out the correct commit
+- ✅ Determining base ref (branch vs tag)
+- ✅ Running validation with override context
+- ✅ Posting results as a comment
+- ✅ Adding reaction emoji to acknowledge
+
+> **Tip**: Copy `templates/comment-revalidation-workflow.yml` for a ready-to-use template
+
+### How It Works
+
+#### Example: Approving a Deviation
+
+1. **PR has a violation**: Validator flags `console.log` usage
+
+2. **Developer comments**:
+
+   ```text
+   @usable This is intentional. The debug utility needs console output 
+   for troubleshooting production issues. Only used in /debug/ directory.
+   ```
+
+3. **Validator understands and documents**:
+   - Creates a fragment in Usable titled "Approved Deviation: console.log in debug utilities"
+   - Includes justification, conditions, PR link, and approver
+   - Tags it as `deviation`, `approved`, `repo:your-repo`
+
+4. **Report shows**:
+
+   ```markdown
+   ## Override Applied
+   
+   A deviation from standards has been approved and documented:
+   
+   - **Deviation**: console.log usage in debug utilities
+   - **Justification**: Required for production troubleshooting
+   - **Documentation**: Fragment created - "Approved Deviation: console.log in debug utilities" (ID: abc-123)
+   - **Approved by**: @developer
+   
+   This deviation has been recorded in the knowledge base for future reference.
+   ```
+
+**Use Cases**:
+
+- ✅ **Approve Deviations**: "This violation is acceptable because..."
+- 🎯 **Focus Validation**: "@usable Focus on security issues only"
+- 💡 **Provide Context**: "@usable This API change was approved by the architecture team"
+- 🔄 **Re-run After Fixes**: "@usable Please revalidate now that I've fixed the issues"
+
+**Benefits**:
+
+- 📚 **Knowledge Base Grows**: Approved deviations are automatically documented
+- 🔗 **Traceability**: Every deviation links back to the approving PR and person
+- 🤝 **Team Communication**: Decisions are visible to everyone
+- 🚀 **No Manual Work**: AI handles documentation automatically
 
 ## 🔒 Security
 
@@ -611,7 +732,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 - 💡 [Request a feature](https://github.com/flowcore/usable-pr-validator/issues)
 - 💬 [Discussions](https://github.com/flowcore/usable-pr-validator/discussions)
 
----
-
 Made with ❤️ by [Flowcore](https://flowcore.io)
-

@@ -445,6 +445,171 @@ jobs:
             echo "⚠️ No full output file found"
           fi
 
+  integration-test-comment-revalidation:
+    name: Integration Test (Comment Revalidation)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Determine validation base ref
+        id: base-ref
+        run: |
+          if [[ "${{ github.head_ref }}" == release-please--* ]]; then
+            # For release-please branches, validate since last release
+            git fetch --tags
+            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -z "$LAST_TAG" ]; then
+              echo "base-ref=${{ github.base_ref }}" >> $GITHUB_OUTPUT
+            else
+              echo "base-ref=$LAST_TAG" >> $GITHUB_OUTPUT
+            fi
+          else
+            # For regular PRs, use the base branch
+            echo "base-ref=${{ github.base_ref }}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create Comment Revalidation Prompt
+        run: |
+          mkdir -p .github/prompts
+          cat > .github/prompts/test-comment-revalidation.md <<'EOF'
+          # Comment-Triggered Revalidation Test
+          
+          ## CRITICAL OUTPUT INSTRUCTION
+          **START YOUR OUTPUT DIRECTLY WITH:** `# PR Validation Report`
+          
+          ## PR Context
+          {{PR_CONTEXT}}
+          
+          ## Your Task
+          Test the comment revalidation feature.
+          
+          ### Step 1: Verify Override Comment
+          
+          Check if there is an override/clarification comment in the PR context above (marked with 🔄).
+          
+          If present:
+          - Acknowledge it in your report
+          - Parse what the user is requesting
+          - Test the deviation documentation feature
+          
+          ### Step 2: Get PR Changes
+          ```bash
+          # Compare base ref (branch or tag) with HEAD
+          # If BASE_BRANCH is a tag, use it directly; if it's a branch, try origin/ prefix
+          git diff {{BASE_BRANCH}}...HEAD 2>/dev/null || git diff origin/{{BASE_BRANCH}}...HEAD
+          ```
+          
+          ### Step 3: Simulate Deviation Approval
+          
+          If the override comment requests approval of a deviation:
+          - Test creating a fragment (but mark it as a test)
+          - Include fragment creation in your report
+          
+          ## Output Format
+          
+          # PR Validation Report
+          
+          ## Summary
+          [Mention this is a comment revalidation test]
+          [Note if override comment was detected]
+          
+          ## Override Comment Test Results
+          - **Override Detected**: Yes/No
+          - **Comment Author**: @[author or "none"]
+          - **Request Type**: [Type of request if detected]
+          
+          ## Critical Violations ❌
+          None found (test scenario)
+          
+          ## Important Issues ⚠️
+          None found (test scenario)
+          
+          ## Suggestions ℹ️
+          - Comment revalidation feature is working correctly
+          
+          ## Validation Outcome
+          - **Status**: PASS ✅
+          - **Test Type**: Comment Revalidation
+          - **Override Support**: Tested
+          - **Critical Issues**: 0
+          - **Important Issues**: 0
+          - **Suggestions**: 1
+          EOF
+      
+      - name: Simulate Override Comment
+        id: override
+        run: |
+          # Simulate a user comment requesting deviation approval
+          cat <<'OVERRIDE_EOF' >> $GITHUB_OUTPUT
+          override-comment<<COMMENT_END
+          @usable This PR is a test.
+          
+          Please approve this as a test of the comment revalidation feature.
+          
+          This simulates a developer requesting approval for a deviation from standards.
+          COMMENT_END
+          OVERRIDE_EOF
+      
+      - name: Run Comment Revalidation Test
+        id: comment-test
+        continue-on-error: true
+        uses: ./
+        with:
+          prompt-file: '.github/prompts/test-comment-revalidation.md'
+          workspace-id: '60c10ca2-4115-4c1a-b6d7-04ac39fd3938'
+          base-ref: ${{ steps.base-ref.outputs.base-ref }}
+          override-comment: ${{ steps.override.outputs.override-comment }}
+          comment-title: 'Comment Revalidation Test'
+          comment-mode: 'update'
+          fail-on-critical: false
+        env:
+          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+          COMMENT_AUTHOR: 'test-user'
+      
+      - name: Verify Override Context Was Included
+        if: always()
+        run: |
+          echo "Comment revalidation test result: ${{ steps.comment-test.outcome }}"
+          
+          # Check if the override comment was processed
+          if [ -f "/tmp/validation-prompt.txt" ]; then
+            echo "::group::Checking Override Comment in Prompt"
+            if grep -q "🔄 Override/Clarification Comment" /tmp/validation-prompt.txt; then
+              echo "✅ Override comment marker found in prompt"
+            else
+              echo "::warning::Override comment marker NOT found in prompt"
+            fi
+            
+            if grep -q "@usable This PR is a test" /tmp/validation-prompt.txt; then
+              echo "✅ Override comment content found in prompt"
+            else
+              echo "::warning::Override comment content NOT found in prompt"
+            fi
+            
+            if grep -q "test-user" /tmp/validation-prompt.txt; then
+              echo "✅ Comment author found in prompt"
+            else
+              echo "::warning::Comment author NOT found in prompt"
+            fi
+            echo "::endgroup::"
+          else
+            echo "⚠️ Prompt file not found - cannot verify override context"
+          fi
+          
+          # Check the validation output
+          if [ -f "/tmp/validation-full-output.md" ]; then
+            echo "::group::Validation Output"
+            cat /tmp/validation-full-output.md
+            echo "::endgroup::"
+          fi
+
   all-checks-passed:
     name: All Checks Passed
     runs-on: ubuntu-latest

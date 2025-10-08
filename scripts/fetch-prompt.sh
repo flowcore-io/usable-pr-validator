@@ -3,6 +3,12 @@ set -euo pipefail
 
 echo "::group::Preparing Prompts for Validation"
 
+# Verify jq is available (pre-installed on GitHub Actions runners)
+if ! command -v jq &> /dev/null; then
+  echo "::error::jq is required but not found. Please install jq or use a GitHub Actions runner with jq pre-installed."
+  exit 1
+fi
+
 # Get USABLE_API_TOKEN from secrets
 USABLE_API_TOKEN="${!MCP_SECRET_NAME:-}"
 if [ -z "$USABLE_API_TOKEN" ]; then
@@ -42,18 +48,10 @@ fetch_fragment_content() {
     return 1
   fi
   
-  # Use Python to properly parse JSON and extract content field
+  # Use jq to parse JSON and extract content field
+  # Note: jq is pre-installed on GitHub Actions runners
   local content
-  content=$(echo "$body" | python3 -c "
-import json
-import sys
-try:
-    data = json.load(sys.stdin)
-    print(data.get('content', ''))
-except Exception as e:
-    sys.stderr.write(f'JSON parse error: {e}\n')
-    sys.exit(1)
-" 2>&1)
+  content=$(echo "$body" | jq -r '.content // empty' 2>&1)
   
   if [ $? -ne 0 ]; then
     echo "::error::Failed to parse fragment JSON response"
@@ -93,21 +91,10 @@ fetch_mcp_system_prompt() {
   fi
   
   # The API might return JSON with a content field, or plain text
-  # Try to parse as JSON first
+  # Try to parse as JSON first using jq
+  # Note: jq is pre-installed on GitHub Actions runners
   local content
-  content=$(echo "$body" | python3 -c "
-import json
-import sys
-try:
-    data = json.load(sys.stdin)
-    if isinstance(data, dict):
-        print(data.get('content', data.get('prompt', '')))
-    else:
-        print('')
-except:
-    # Not JSON, return empty
-    print('')
-" 2>&1)
+  content=$(echo "$body" | jq -r '.content // .prompt // empty' 2>/dev/null)
   
   # If JSON parsing returned empty, use the body as-is (assuming plain text)
   if [ -z "$content" ]; then

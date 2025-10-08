@@ -4,6 +4,19 @@ set -euo pipefail
 echo "::group::Running PR Validation"
 
 # Prepare prompt with placeholder replacement
+# 
+# Uses bash native string replacement for simplicity and safety.
+# For current scope (8 placeholders), this is efficient and readable.
+# 
+# Alternative approaches considered:
+# - envsubst: Would require careful escaping of $ symbols in prompts
+# - sed: More complex escaping, harder to maintain
+# - External templating tool: Adds dependency, overkill for current needs
+#
+# Current approach handles:
+# - Multi-line content safely
+# - Special characters without escaping issues
+# - Fast execution (no external process spawning per placeholder)
 prepare_prompt() {
   local prompt_file="$1"
   local output_file="/tmp/validation-prompt.txt"
@@ -17,6 +30,17 @@ prepare_prompt() {
 
 **Description**:
 ${PR_DESCRIPTION:-No description provided}"
+
+  # Add override comment if provided
+  if [ -n "$OVERRIDE_COMMENT" ]; then
+    PR_CONTEXT="${PR_CONTEXT}
+
+**🔄 Override/Clarification Comment** (from @${COMMENT_AUTHOR:-unknown}):
+\`\`\`
+${OVERRIDE_COMMENT}
+\`\`\`
+"
+  fi
 
   # Read prompt template
   PROMPT_CONTENT=$(cat "$prompt_file")

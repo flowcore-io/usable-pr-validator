@@ -23,6 +23,10 @@ inputs:
     description: 'Merge fetched Usable prompt with custom prompt-file (only when both are provided)'
     required: false
     default: 'true'
+  override-comment:
+    description: 'User comment requesting validation override or clarification (typically from @usable mention)'
+    required: false
+    default: ''
   gemini-model:
     description: 'Gemini model to use (gemini-2.5-flash, gemini-2.0-flash, gemini-2.5-pro)'
     required: false
@@ -228,6 +232,8 @@ runs:
         PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ', ') }}
         BASE_BRANCH: ${{ inputs.base-ref || github.event.pull_request.base.ref }}
         HEAD_BRANCH: ${{ inputs.head-ref || github.event.pull_request.head.ref }}
+        OVERRIDE_COMMENT: ${{ inputs.override-comment }}
+        COMMENT_AUTHOR: ${{ env.COMMENT_AUTHOR }}
       run: |
         ${{ github.action_path }}/scripts/validate.sh
     

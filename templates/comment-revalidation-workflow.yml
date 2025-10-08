@@ -1,0 +1,31 @@
+# Template: Comment-Triggered Revalidation
+# Copy this file to .github/workflows/comment-revalidation.yml in your repository
+
+name: Comment Revalidation
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  # Only run if the comment is on a PR and mentions @usable
+  revalidate:
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@usable')
+    uses: flowcore/usable-pr-validator/.github/workflows/comment-revalidation.yml@v1
+    with:
+      workspace-id: 'your-workspace-uuid-here'  # REQUIRED: Your Usable workspace ID
+      prompt-file: '.github/prompts/pr-validation.md'  # Optional: Path to your prompt
+      # use-dynamic-prompts: true  # Optional: Fetch prompt from Usable API
+      # prompt-fragment-id: 'fragment-uuid'  # Required if use-dynamic-prompts is true
+      # gemini-model: 'gemini-2.5-flash'  # Optional: Choose Gemini model
+      # comment-title: '🔄 Revalidation'  # Optional: Customize comment title
+      # fail-on-critical: false  # Optional: Fail build on critical issues
+    secrets:
+      GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+      USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+    permissions:
+      contents: read
+      pull-requests: write
+

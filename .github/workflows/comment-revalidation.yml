@@ -1,0 +1,297 @@
+name: Comment Revalidation (Reusable)
+
+# Reusable workflow for comment-triggered validation
+# Users can call this from their repository with minimal configuration
+
+on:
+  workflow_call:
+    inputs:
+      workspace-id:
+        description: 'Usable workspace UUID'
+        required: true
+        type: string
+      prompt-file:
+        description: 'Path to validation prompt file'
+        required: false
+        type: string
+        default: '.github/prompts/pr-validation.md'
+      use-dynamic-prompts:
+        description: 'Fetch prompt from Usable API'
+        required: false
+        type: boolean
+        default: false
+      prompt-fragment-id:
+        description: 'Usable fragment UUID for dynamic prompt'
+        required: false
+        type: string
+        default: ''
+      gemini-model:
+        description: 'Gemini model to use'
+        required: false
+        type: string
+        default: 'gemini-2.5-flash'
+      comment-title:
+        description: 'Title for the validation comment'
+        required: false
+        type: string
+        default: '🔄 Revalidation (Comment Triggered)'
+      fail-on-critical:
+        description: 'Fail build on critical violations'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      GEMINI_SERVICE_ACCOUNT_KEY:
+        description: 'Base64-encoded Gemini service account key'
+        required: true
+      USABLE_API_TOKEN:
+        description: 'Usable API token'
+        required: true
+  
+  # Also allow direct trigger for testing
+  issue_comment:
+    types: [created]
+
+jobs:
+  check-trigger:
+    name: Check Comment Trigger
+    runs-on: ubuntu-latest
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@usable')
+    outputs:
+      should-validate: ${{ steps.check.outputs.should-validate }}
+      comment-body: ${{ steps.extract.outputs.comment-body }}
+    steps:
+      - name: Check if comment triggers validation
+        id: check
+        run: |
+          if [[ "${{ contains(github.event.comment.body, '@usable') }}" == "true" ]]; then
+            echo "should-validate=true" >> $GITHUB_OUTPUT
+            echo "✅ Comment mentions @usable - will trigger validation"
+          else
+            echo "should-validate=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Comment does not mention @usable - skipping"
+          fi
+      
+      - name: Extract comment content
+        id: extract
+        env:
+          COMMENT_TEXT: ${{ github.event.comment.body }}
+        run: |
+          # Extract the comment body
+          echo "comment-body<<COMMENT_EOF" >> $GITHUB_OUTPUT
+          echo "$COMMENT_TEXT" >> $GITHUB_OUTPUT
+          echo "COMMENT_EOF" >> $GITHUB_OUTPUT
+          
+          echo "::group::Comment Content"
+          echo "$COMMENT_TEXT"
+          echo "::endgroup::"
+
+  revalidate:
+    name: Revalidate PR
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should-validate == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Get PR details
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            
+            core.setOutput('base-ref', pr.data.base.ref);
+            core.setOutput('head-ref', pr.data.head.ref);
+            core.setOutput('head-sha', pr.data.head.sha);
+            
+            console.log(`PR #${context.issue.number}`);
+            console.log(`Base: ${pr.data.base.ref}`);
+            console.log(`Head: ${pr.data.head.ref} (${pr.data.head.sha})`);
+      
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head-sha }}
+          fetch-depth: 0
+      
+      - name: Determine validation base ref
+        id: base-ref
+        run: |
+          if [[ "${{ steps.pr.outputs.head-ref }}" == release-please--* ]]; then
+            # For release-please branches, validate since last release
+            git fetch --tags
+            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -z "$LAST_TAG" ]; then
+              echo "base-ref=${{ steps.pr.outputs.base-ref }}" >> $GITHUB_OUTPUT
+            else
+              echo "base-ref=$LAST_TAG" >> $GITHUB_OUTPUT
+            fi
+          else
+            # For regular PRs, use the base branch
+            echo "base-ref=${{ steps.pr.outputs.base-ref }}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create validation prompt
+        run: |
+          mkdir -p .github/prompts
+          cat > .github/prompts/comment-revalidation.md <<'EOF'
+          # PR Re-validation (Comment Triggered)
+          
+          ## CRITICAL OUTPUT INSTRUCTION
+          **START YOUR OUTPUT DIRECTLY WITH:** `# PR Validation Report`
+          
+          ## PR Context
+          {{PR_CONTEXT}}
+          
+          ## User Override/Clarification
+          A user has requested revalidation with the following comment:
+          
+          ```
+          ${{ needs.check-trigger.outputs.comment-body }}
+          ```
+          
+          **Important**: This comment may:
+          - Request a specific deviation from standards
+          - Clarify why certain violations are acceptable
+          - Override previous validation results
+          - Ask you to focus on specific aspects
+          
+          ## Your Task
+          
+          ### Step 1: Understand the Override Request
+          Parse the user's comment to understand:
+          - What rule/standard is being deviated from?
+          - Why is the deviation necessary?
+          - What is the business/technical justification?
+          
+          ### Step 2: Get PR Changes
+          ```bash
+          # Compare base ref (branch or tag) with HEAD
+          # If BASE_BRANCH is a tag, use it directly; if it's a branch, try origin/ prefix
+          git diff {{BASE_BRANCH}}...HEAD 2>/dev/null || git diff origin/{{BASE_BRANCH}}...HEAD
+          ```
+          
+          ### Step 3: Search Usable Knowledge Base
+          Use `agentic-search-fragments` to find relevant standards:
+          - Query: "Standards and best practices for this repository"
+          - Tags: `repo:usable-pr-validator`
+          - Use `get-memory-fragment-content` to read full details
+          
+          ### Step 4: Document the Deviation
+          **If the user is requesting a deviation from established standards:**
+          
+          Use `create-memory-fragment` to document the approved deviation:
+          - **Title**: "Approved Deviation: [Brief description]"
+          - **Fragment Type**: Use `solution` type (ID: `b06897e0-c39e-486b-8a9b-aab0ea260694`)
+          - **Workspace ID**: `60c10ca2-4115-4c1a-b6d7-04ac39fd3938`
+          - **Tags**: `["repo:usable-pr-validator", "deviation", "approved"]`
+          - **Content**: Include:
+            - What standard was deviated from
+            - Why the deviation was approved
+            - PR number and link
+            - User who approved it
+            - Date of approval
+            - Any conditions or limitations
+          
+          Example fragment creation:
+          ```
+          create-memory-fragment(
+            workspaceId: "60c10ca2-4115-4c1a-b6d7-04ac39fd3938",
+            title: "Approved Deviation: Allow console.log in debug utilities",
+            fragmentTypeId: "b06897e0-c39e-486b-8a9b-aab0ea260694",
+            tags: ["repo:usable-pr-validator", "deviation", "approved", "console-log"],
+            content: "# Approved Deviation
+          
+          ## Standard Deviated From
+          No console.log statements in production code
+          
+          ## Reason for Deviation
+          Debug utility files explicitly need console output for their purpose.
+          
+          ## Conditions
+          - Only allowed in files under `/debug/` directory
+          - Must be documented with comments
+          
+          ## Approval Details
+          - **PR**: #123
+          - **Approved by**: @username
+          - **Date**: 2025-10-08
+          "
+          )
+          ```
+          
+          ### Step 5: Validate with Override Context
+          Re-validate the PR considering:
+          - The user's override comment
+          - Whether the deviation is reasonable
+          - If the fragment was created successfully
+          
+          ## Output Format
+          
+          # PR Validation Report
+          
+          ## Summary
+          [Include that this is a comment-triggered revalidation]
+          [Mention the user's override/clarification]
+          
+          ## Override Applied
+          [Explain what override was requested and how it was handled]
+          [If a deviation fragment was created, include a link to it]
+          
+          ## Critical Violations ❌
+          [Violations that remain even after considering the override]
+          
+          ## Important Issues ⚠️
+          [Issues that remain even after considering the override]
+          
+          ## Suggestions ℹ️
+          [Additional suggestions]
+          
+          ## Validation Outcome
+          - **Status**: PASS ✅ | FAIL ❌
+          - **Triggered by**: Comment from @{{COMMENT_AUTHOR}}
+          - **Override applied**: Yes/No
+          - **Deviation documented**: [Fragment link if created]
+          - **Critical Issues**: [count]
+          - **Important Issues**: [count]
+          - **Suggestions**: [count]
+          EOF
+      
+      - name: Run Revalidation
+        uses: ./
+        with:
+          prompt-file: ${{ inputs.prompt-file || '.github/prompts/comment-revalidation.md' }}
+          use-dynamic-prompts: ${{ inputs.use-dynamic-prompts || false }}
+          prompt-fragment-id: ${{ inputs.prompt-fragment-id || '' }}
+          workspace-id: ${{ inputs.workspace-id || '60c10ca2-4115-4c1a-b6d7-04ac39fd3938' }}
+          base-ref: ${{ steps.base-ref.outputs.base-ref }}
+          gemini-model: ${{ inputs.gemini-model || 'gemini-2.5-flash' }}
+          comment-title: ${{ inputs.comment-title || '🔄 Revalidation (Comment Triggered)' }}
+          comment-mode: 'create'
+          fail-on-critical: ${{ inputs.fail-on-critical || false }}
+          override-comment: ${{ needs.check-trigger.outputs.comment-body }}
+        env:
+          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+      
+      - name: React to comment
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: ${{ github.event.comment.id }},
+              content: '👀'
+            });
+
