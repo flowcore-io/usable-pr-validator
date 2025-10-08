@@ -48,3 +48,19 @@ jobs:
           echo "Tag: ${{ steps.release.outputs.tag_name }}"
           echo "Version: ${{ steps.release.outputs.version }}"
           echo "Release PR: ${{ steps.release.outputs.pr }}"
+      
+      - name: Checkout code
+        if: ${{ steps.release.outputs.release_created }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.FLOWCORE_MACHINE_GITHUB_TOKEN }}
+      
+      - name: Update latest tag
+        if: ${{ steps.release.outputs.release_created }}
+        run: |
+          echo "Updating 'latest' tag to point to ${{ steps.release.outputs.tag_name }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -fa latest -m "Update latest tag to ${{ steps.release.outputs.tag_name }}"
+          git push origin latest --force
