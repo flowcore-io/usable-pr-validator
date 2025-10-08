@@ -26,12 +26,15 @@ fetch_fragment_content() {
   
   local fetch_url="${USABLE_API_BASE}/v1/fragments/${fragment_id}"
   
-  local response=$(curl -s -w "\n%{http_code}" \
+  local response
+  response=$(curl -s -w "\n%{http_code}" \
     -X GET "$fetch_url" \
     -H "Authorization: Bearer $USABLE_API_TOKEN")
   
-  local http_code=$(echo "$response" | tail -n1)
-  local body=$(echo "$response" | sed '$d')
+  local http_code
+  http_code=$(echo "$response" | tail -n1)
+  local body
+  body=$(echo "$response" | sed '$d')
   
   if [ "$http_code" != "200" ]; then
     echo "::error::Failed to fetch fragment content (HTTP $http_code)"
@@ -40,7 +43,8 @@ fetch_fragment_content() {
   fi
   
   # Use Python to properly parse JSON and extract content field
-  local content=$(echo "$body" | python3 -c "
+  local content
+  content=$(echo "$body" | python3 -c "
 import json
 import sys
 try:
@@ -73,12 +77,15 @@ fetch_mcp_system_prompt() {
   
   local fetch_url="${USABLE_API_BASE}/workspaces/${workspace_id}/mcp-system-prompt"
   
-  local response=$(curl -s -w "\n%{http_code}" \
+  local response
+  response=$(curl -s -w "\n%{http_code}" \
     -X GET "$fetch_url" \
     -H "Authorization: Bearer $USABLE_API_TOKEN")
   
-  local http_code=$(echo "$response" | tail -n1)
-  local body=$(echo "$response" | sed '$d')
+  local http_code
+  http_code=$(echo "$response" | tail -n1)
+  local body
+  body=$(echo "$response" | sed '$d')
   
   if [ "$http_code" != "200" ]; then
     echo "::warning::Failed to fetch MCP system prompt (HTTP $http_code), continuing without it"
@@ -87,7 +94,8 @@ fetch_mcp_system_prompt() {
   
   # The API might return JSON with a content field, or plain text
   # Try to parse as JSON first
-  local content=$(echo "$body" | python3 -c "
+  local content
+  content=$(echo "$body" | python3 -c "
 import json
 import sys
 try:
@@ -126,6 +134,7 @@ main() {
   
   # Step 2: Fetch MCP system prompt from Usable API
   if [ "$HAS_API_TOKEN" = true ] && [ -n "$WORKSPACE_ID" ]; then
+    local mcp_content
     mcp_content=$(fetch_mcp_system_prompt "$WORKSPACE_ID")
     
     if [ -n "$mcp_content" ]; then
@@ -155,6 +164,7 @@ main() {
     
     echo "Fetching user prompt from fragment: $PROMPT_FRAGMENT_ID"
     
+    local user_content
     user_content=$(fetch_fragment_content "$PROMPT_FRAGMENT_ID")
     
     if [ -n "$user_content" ]; then
