@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0](https://github.com/flowcore-io/usable-pr-validator/compare/v1.3.0...v1.4.0) (2025-10-10)
+
+
+### Features
+
+* **action:** :sparkles: add PR diff integration and enhanced validation ([8ad046b](https://github.com/flowcore-io/usable-pr-validator/commit/8ad046b10aec4b07b491f14fe37d53c8742f337a))
+
 ## [1.3.0](https://github.com/flowcore-io/usable-pr-validator/compare/v1.2.1...v1.3.0) (2025-10-08)
 
 
