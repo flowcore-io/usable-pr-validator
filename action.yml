@@ -78,6 +78,10 @@ inputs:
     description: 'Head reference for diff comparison (defaults to PR head branch)'
     required: false
     default: ''
+  allow-web-fetch:
+    description: 'Allow AI to use web_fetch tool for external resources (security consideration)'
+    required: false
+    default: 'false'
 
 outputs:
   validation-status:
@@ -136,6 +140,11 @@ runs:
           exit 1
         fi
         
+        if [[ ! "${{ inputs.allow-web-fetch }}" =~ ^(true|false)$ ]]; then
+          echo "::error::Invalid allow-web-fetch. Must be: true or false"
+          exit 1
+        fi
+        
         echo "✅ All inputs validated successfully"
         echo "::endgroup::"
     
@@ -167,24 +176,103 @@ runs:
       shell: bash
       env:
         BASE_REF: ${{ inputs.base-ref }}
+        HEAD_REF: ${{ inputs.head-ref }}
         DEFAULT_BASE: ${{ github.event.pull_request.base.ref }}
+        DEFAULT_HEAD: ${{ github.event.pull_request.head.ref }}
+        MAX_RETRIES: ${{ inputs.max-retries }}
       run: |
         echo "::group::Configuring Git"
         git config --global user.email "action@github.com"
         git config --global user.name "GitHub Action"
         
-        # Determine which base ref to fetch
-        BASE_TO_FETCH="${BASE_REF:-$DEFAULT_BASE}"
+        # Function to fetch ref with retry logic
+        fetch_ref_with_retry() {
+          local ref="$1"
+          local ref_type="$2"
+          local retry_count=0
+          local max_retries="${MAX_RETRIES:-2}"
+          
+          while [ $retry_count -le $max_retries ]; do
+            echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Fetching $ref_type ref: $ref"
+            
+            # Try to fetch as a branch first
+            if git fetch origin "$ref:refs/remotes/origin/$ref" 2>/dev/null; then
+              echo "✅ Successfully fetched $ref_type ref as branch: $ref"
+              return 0
+            fi
+            
+            # Try as a tag
+            if git fetch --tags origin "refs/tags/$ref:refs/tags/$ref" 2>/dev/null; then
+              echo "✅ Successfully fetched $ref_type ref as tag: $ref"
+              return 0
+            fi
+            
+            # Try fetching all refs (fallback)
+            if git fetch origin "+refs/heads/$ref:refs/remotes/origin/$ref" 2>/dev/null; then
+              echo "✅ Successfully fetched $ref_type ref using explicit refspec: $ref"
+              return 0
+            fi
+            
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -le $max_retries ]; then
+              wait_time=$((2 ** retry_count))
+              echo "⚠️ Failed to fetch $ref. Retrying after ${wait_time} seconds..."
+              sleep $wait_time
+            else
+              echo "::warning::Failed to fetch $ref_type ref: $ref after $((max_retries + 1)) attempts"
+              return 1
+            fi
+          done
+        }
         
+        # Determine which refs to fetch
+        BASE_TO_FETCH="${BASE_REF:-$DEFAULT_BASE}"
+        HEAD_TO_FETCH="${HEAD_REF:-$DEFAULT_HEAD}"
+        
+        # Fetch base ref
         if [ -n "$BASE_TO_FETCH" ]; then
-          echo "Fetching base ref: $BASE_TO_FETCH"
-          # Try to fetch as a branch first, then as a tag if that fails
-          if ! git fetch origin "$BASE_TO_FETCH" 2>/dev/null; then
-            echo "Not a branch, trying as a tag..."
-            git fetch --tags origin 2>/dev/null || true
+          if ! fetch_ref_with_retry "$BASE_TO_FETCH" "base"; then
+            echo "::error::Failed to fetch base ref: $BASE_TO_FETCH"
+            echo "This may cause diff operations to fail."
+          fi
+        else
+          echo "::warning::No base ref specified"
+        fi
+        
+        # Fetch head ref
+        if [ -n "$HEAD_TO_FETCH" ]; then
+          if ! fetch_ref_with_retry "$HEAD_TO_FETCH" "head"; then
+            echo "::error::Failed to fetch head ref: $HEAD_TO_FETCH"
+            echo "This may cause diff operations to fail."
+          fi
+        else
+          echo "::warning::No head ref specified"
+        fi
+        
+        # Verify refs are available for diff
+        echo ""
+        echo "Verifying refs..."
+        if [ -n "$BASE_TO_FETCH" ]; then
+          if git rev-parse "origin/$BASE_TO_FETCH" >/dev/null 2>&1; then
+            echo "✅ Base ref available: origin/$BASE_TO_FETCH"
+          elif git rev-parse "$BASE_TO_FETCH" >/dev/null 2>&1; then
+            echo "✅ Base ref available: $BASE_TO_FETCH"
+          else
+            echo "::warning::Base ref not found locally: $BASE_TO_FETCH"
           fi
         fi
         
+        if [ -n "$HEAD_TO_FETCH" ]; then
+          if git rev-parse "origin/$HEAD_TO_FETCH" >/dev/null 2>&1; then
+            echo "✅ Head ref available: origin/$HEAD_TO_FETCH"
+          elif git rev-parse "$HEAD_TO_FETCH" >/dev/null 2>&1; then
+            echo "✅ Head ref available: $HEAD_TO_FETCH"
+          else
+            echo "::warning::Head ref not found locally: $HEAD_TO_FETCH"
+          fi
+        fi
+        
+        echo ""
         echo "✅ Git configured"
         echo "::endgroup::"
     
@@ -234,6 +322,7 @@ runs:
         HEAD_BRANCH: ${{ inputs.head-ref || github.event.pull_request.head.ref }}
         OVERRIDE_COMMENT: ${{ inputs.override-comment }}
         COMMENT_AUTHOR: ${{ env.COMMENT_AUTHOR }}
+        ALLOW_WEB_FETCH: ${{ inputs.allow-web-fetch }}
       run: |
         ${{ github.action_path }}/scripts/validate.sh
     

@@ -2,6 +2,10 @@
 
 ## Critical Guidelines
 
+### ⚠️ WEB FETCH POLICY
+
+{{WEB_FETCH_POLICY}}
+
 ### ⚠️ NO HALLUCINATION
 
 - **ONLY** report violations in files that actually exist in the git diff
@@ -192,6 +196,39 @@ After documenting the deviation:
    - Get the diff: `git diff origin/{base_branch}...{head_branch}`
    - Identify all changed files
    - Understand the scope and impact
+
+   **⚠️ HANDLING GIT DIFF ERRORS:**
+
+   If you encounter git diff errors (e.g., "revisions or paths not found"), DO NOT fail immediately:
+
+   - **First**: Try using the helper script: `bash scripts/get-pr-diff.sh files` (for file list)
+   - **Second**: Try alternative diff formats:
+     - Three-dot: `git diff origin/{base}...{head}` (shows changes in head since diverging from base)
+     - Two-dot: `git diff origin/{base}..{head}` (shows all differences between commits)
+     - Direct refs: `git diff origin/{base} {head}`
+   - **Third**: If all diff methods fail, inform the user in your report:
+
+     ```markdown
+     ## ⚠️ Unable to Analyze Changes
+
+     I was unable to fetch the git diff for this PR. This can happen when:
+     - The branch references are not available in the GitHub Actions environment
+     - The PR is from a fork
+     - The git setup step failed to fetch necessary refs
+
+     **To resolve this**, please ensure:
+     1. Both base and head branches are accessible
+     2. The action has proper permissions to fetch refs
+     3. You can manually provide the diff using: `git diff --name-only {base}...{head}`
+
+     I cannot complete validation without the diff information.
+     ```
+
+   **DO NOT**:
+   - Use `web_fetch` or similar tools to try to download diffs from URLs
+   - Make up or assume what files were changed
+   - Proceed with validation if you cannot verify the actual changes
+   - Report violations in files you cannot confirm were changed
 
 3. **Validate Against Standards**
    - Use the knowledge base to find relevant standards

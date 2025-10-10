@@ -3,6 +3,42 @@ set -euo pipefail
 
 echo "::group::Running PR Validation"
 
+# Function to verify git refs are available
+verify_git_refs() {
+  local base="${BASE_BRANCH}"
+  local head="${HEAD_BRANCH}"
+  local has_error=false
+  
+  echo "Verifying git refs are available for diff..."
+  
+  # Try to resolve base ref
+  if ! git rev-parse "origin/$base" >/dev/null 2>&1 && ! git rev-parse "$base" >/dev/null 2>&1; then
+    echo "::warning::Base ref not found: $base"
+    echo "Available remote branches:"
+    git branch -r | head -10
+    has_error=true
+  else
+    echo "✅ Base ref available: $base"
+  fi
+  
+  # Try to resolve head ref
+  if ! git rev-parse "origin/$head" >/dev/null 2>&1 && ! git rev-parse "$head" >/dev/null 2>&1 && ! git rev-parse "HEAD" >/dev/null 2>&1; then
+    echo "::warning::Head ref not found: $head"
+    echo "Current HEAD:"
+    git rev-parse HEAD || echo "HEAD not available"
+    has_error=true
+  else
+    echo "✅ Head ref available: $head"
+  fi
+  
+  if [ "$has_error" = true ]; then
+    echo ""
+    echo "::warning::Git refs may not be properly set up. Diff operations might fail."
+    echo "The AI will be informed to handle diff errors gracefully."
+    echo ""
+  fi
+}
+
 # Prepare prompt with placeholder replacement
 # 
 # Uses bash native string replacement for simplicity and safety.
@@ -42,11 +78,20 @@ ${OVERRIDE_COMMENT}
 "
   fi
 
+  # Prepare web fetch policy based on flag
+  local web_fetch_policy
+  if [ "${ALLOW_WEB_FETCH:-false}" = "true" ]; then
+    web_fetch_policy="**Web fetch is ENABLED** for this validation. You may use the \`web_fetch\` tool to retrieve external resources if needed for validation (e.g., checking external documentation, standards, or references). Use this capability responsibly and only when necessary."
+  else
+    web_fetch_policy="**Web fetch is DISABLED** for this validation. DO NOT use the \`web_fetch\` tool or attempt to download content from URLs. All validation must be performed using only the git repository contents, PR context, and Usable MCP knowledge base."
+  fi
+
   # Read prompt template
   PROMPT_CONTENT=$(cat "$prompt_file")
   
   # Replace placeholders using bash string replacement (NOT sed)
   # This handles special characters safely
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{WEB_FETCH_POLICY\}\}/${web_fetch_policy}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_CONTEXT\}\}/${PR_CONTEXT}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{BASE_BRANCH\}\}/${BASE_BRANCH}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{HEAD_BRANCH\}\}/${HEAD_BRANCH}}"
@@ -232,6 +277,9 @@ parse_results() {
 
 # Main execution
 main() {
+  # Verify git refs before starting validation
+  verify_git_refs
+  
   # Determine which prompt file to use
   local actual_prompt_file=""
   

@@ -122,6 +122,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `timeout-minutes` | Maximum execution time in minutes | | `15` |
 | `base-ref` | Base reference for diff comparison. Useful for release-please branches to compare against last release tag instead of base branch. | | PR base branch |
 | `head-ref` | Head reference for diff comparison | | PR head branch |
+| `allow-web-fetch` | Allow AI to use web_fetch tool for external resources (security consideration) | | `false` |
 
 > **Note**: You must set the `USABLE_API_TOKEN` secret (or the custom secret name specified in `mcp-token-secret`). Usable MCP integration is required for this action.
 
@@ -585,6 +586,44 @@ permissions:
 3. Use least-privilege service accounts
 4. Enable audit logging in Google Cloud
 5. Review validation prompts for sensitive data
+6. **Keep `allow-web-fetch` disabled** (default) unless you specifically need it
+
+### Web Fetch Security
+
+The `allow-web-fetch` input controls whether the AI can download external resources during validation.
+
+**Default: `false` (DISABLED)** - Recommended for most use cases
+
+- ✅ **When to keep it disabled (default)**:
+  - Standard PR validation using only your codebase and Usable knowledge base
+  - Security-sensitive environments
+  - When you want to ensure validation is fully reproducible
+  - When you don't need external documentation or references
+
+- ⚠️ **When you might enable it**:
+  - Validating against external API documentation
+  - Checking compliance with published standards (e.g., OWASP, RFC specs)
+  - Verifying links in documentation PRs
+  - Fetching external schema definitions
+
+**Security implications when enabled**:
+
+- AI can make HTTP requests to arbitrary URLs
+- Could potentially expose internal URLs if mentioned in PR
+- May introduce non-deterministic validation results
+- Consider network egress policies and firewall rules
+
+**Example of enabling**:
+
+```yaml
+- uses: flowcore/usable-pr-validator@latest
+  with:
+    prompt-file: '.github/prompts/validate-api-docs.md'
+    allow-web-fetch: true  # Only enable when needed
+  env:
+    GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+    USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+```
 
 ## 🐛 Troubleshooting
 
