@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1](https://github.com/flowcore-io/usable-pr-validator/compare/v1.5.0...v1.5.1) (2025-10-12)
+
+
+### Bug Fixes
+
+* **mcp:** :adhesive_bandage: revert incorrect workspace-id header and add MCP debug output ([9e3a09c](https://github.com/flowcore-io/usable-pr-validator/commit/9e3a09ca1cefa766958a3e2a673d1c537cc10fb3))
+* **mcp:** :bug: fix MCP workspace context and git pager issues ([67bcf4f](https://github.com/flowcore-io/usable-pr-validator/commit/67bcf4f6e85cd46fa1355b1fb79e26fd00a8df7a))
+
 ## [1.5.0](https://github.com/flowcore-io/usable-pr-validator/compare/v1.4.0...v1.5.0) (2025-10-12)
 
 
