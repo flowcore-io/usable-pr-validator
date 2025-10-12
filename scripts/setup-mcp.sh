@@ -22,7 +22,7 @@ fi
 cat > /tmp/gemini-settings.json <<EOF
 {
   "mcpServers": {
-    "knowledge-base": {
+    "usable": {
       "httpUrl": "$MCP_URL",
       "headers": {
         "Authorization": "Bearer $MCP_TOKEN"
@@ -41,4 +41,10 @@ echo "GEMINI_SETTINGS=/tmp/gemini-settings.json" >> $GITHUB_ENV
 
 echo "✅ MCP server configured"
 echo "  URL: $MCP_URL"
+echo "  Settings file: /tmp/gemini-settings.json"
+
+# Debug: Show settings file content (mask token)
+echo "  Configuration preview:"
+cat /tmp/gemini-settings.json | sed 's/"Bearer [^"]*"/"Bearer ***MASKED***"/g' | sed 's/^/    /'
+
 echo "::endgroup::"
