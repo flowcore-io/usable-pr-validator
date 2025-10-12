@@ -627,6 +627,99 @@ The `allow-web-fetch` input controls whether the AI can download external resour
 
 ## 🐛 Troubleshooting
 
+### No Output from Gemini CLI
+
+**Symptom**: GitHub Action runs but shows no Gemini output or errors
+
+**Possible Causes**:
+
+- Gemini CLI failing silently
+- Output buffering issues
+- Git diff failures preventing AI from analyzing changes
+
+**Solutions**:
+
+1. **Check the Git Diff Setup section** in action logs:
+
+```
+🔍 Verifying Git Diff Setup
+✅ Base ref available: origin/main
+✅ Head ref available: origin/feature-branch
+✅ Three-dot diff works: origin/main...origin/feature-branch
+```
+
+2. **Look for Gemini CLI output** in the logs:
+
+```
+🤖 Running Gemini CLI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Model: gemini-2.5-flash
+Prompt size: XXXX bytes
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+3. **Check for error details** in collapsed groups:
+
+- Look for "❌ Error Details" group
+- Check both STDERR and STDOUT output
+- Review exit codes
+
+4. **Verify git refs are properly fetched**:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0  # Important: fetch full history
+```
+
+5. **Use the diagnostic script locally**:
+
+```bash
+# Clone the repo and run
+./scripts/test-git-diff.sh main feature-branch
+```
+
+### Git Diff Not Working
+
+**Symptom**: Error messages like "revisions or paths not found" or AI reports inability to analyze changes
+
+**Root Cause**: Git refs not properly fetched in GitHub Actions environment
+
+**Automated Fix** (already implemented in v1.3.1+):
+
+- Enhanced git setup with retry logic for both base and head refs
+- Multiple ref format attempts (branch, tag, explicit refspec)
+- Pre-flight validation that tests git diff before AI starts
+
+**Manual Verification**:
+
+```bash
+# Run diagnostic script
+./scripts/test-git-diff.sh <base-branch> <head-branch>
+
+# Expected output:
+# ✅ Base ref available: origin/main
+# ✅ Head ref available: origin/feature
+# ✅ Three-dot diff works
+# 📊 5 files changed
+```
+
+**If still failing**:
+
+```yaml
+# Option 1: Ensure full git history is fetched
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+    ref: ${{ github.event.pull_request.head.sha }}
+
+# Option 2: Explicitly fetch both refs
+- name: Fetch refs
+  run: |
+    git fetch origin ${{ github.event.pull_request.base.ref }}
+    git fetch origin ${{ github.event.pull_request.head.ref }}
+```
+
 ### Validation Fails Immediately
 
 **Symptom**: Action fails before running Gemini

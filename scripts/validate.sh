@@ -3,39 +3,95 @@ set -euo pipefail
 
 echo "::group::Running PR Validation"
 
-# Function to verify git refs are available
+# Function to verify git refs are available and test diff
 verify_git_refs() {
   local base="${BASE_BRANCH}"
   local head="${HEAD_BRANCH}"
   local has_error=false
   
-  echo "Verifying git refs are available for diff..."
+  echo "::group::🔍 Verifying Git Diff Setup"
+  echo "Base branch: $base"
+  echo "Head branch: $head"
+  echo ""
   
   # Try to resolve base ref
-  if ! git rev-parse "origin/$base" >/dev/null 2>&1 && ! git rev-parse "$base" >/dev/null 2>&1; then
-    echo "::warning::Base ref not found: $base"
+  echo "Checking base ref..."
+  local base_resolved=false
+  for ref_format in "origin/$base" "$base" "refs/heads/$base" "refs/remotes/origin/$base"; do
+    if git rev-parse "$ref_format" >/dev/null 2>&1; then
+      echo "✅ Base ref available: $ref_format"
+      local base_commit=$(git rev-parse "$ref_format")
+      echo "   Commit: $base_commit"
+      base_resolved=true
+      break
+    fi
+  done
+  
+  if [ "$base_resolved" = false ]; then
+    echo "::error::❌ Base ref not found: $base"
     echo "Available remote branches:"
     git branch -r | head -10
     has_error=true
-  else
-    echo "✅ Base ref available: $base"
   fi
   
   # Try to resolve head ref
-  if ! git rev-parse "origin/$head" >/dev/null 2>&1 && ! git rev-parse "$head" >/dev/null 2>&1 && ! git rev-parse "HEAD" >/dev/null 2>&1; then
-    echo "::warning::Head ref not found: $head"
+  echo ""
+  echo "Checking head ref..."
+  local head_resolved=false
+  for ref_format in "origin/$head" "$head" "HEAD" "refs/heads/$head" "refs/remotes/origin/$head"; do
+    if git rev-parse "$ref_format" >/dev/null 2>&1; then
+      echo "✅ Head ref available: $ref_format"
+      local head_commit=$(git rev-parse "$ref_format")
+      echo "   Commit: $head_commit"
+      head_resolved=true
+      break
+    fi
+  done
+  
+  if [ "$head_resolved" = false ]; then
+    echo "::error::❌ Head ref not found: $head"
     echo "Current HEAD:"
     git rev-parse HEAD || echo "HEAD not available"
     has_error=true
+  fi
+  
+  # Test git diff commands
+  echo ""
+  echo "Testing git diff commands..."
+  
+  # Test three-dot diff (what AI will use)
+  if git diff --name-only "origin/$base...origin/$head" >/dev/null 2>&1; then
+    echo "✅ Three-dot diff works: origin/$base...origin/$head"
+    local file_count=$(git diff --name-only "origin/$base...origin/$head" | wc -l)
+    echo "   Files changed: $file_count"
+  elif git diff --name-only "origin/$base..$head" >/dev/null 2>&1; then
+    echo "⚠️  Three-dot diff failed, but two-dot diff works"
+    local file_count=$(git diff --name-only "origin/$base..$head" | wc -l)
+    echo "   Files changed: $file_count"
+  elif git diff --name-only "$base...$head" >/dev/null 2>&1; then
+    echo "⚠️  Standard diff works without origin/ prefix"
+    local file_count=$(git diff --name-only "$base...$head" | wc -l)
+    echo "   Files changed: $file_count"
   else
-    echo "✅ Head ref available: $head"
+    echo "::error::❌ Git diff command failed!"
+    echo "Attempted formats:"
+    echo "  - origin/$base...origin/$head"
+    echo "  - origin/$base..$head"
+    echo "  - $base...$head"
+    has_error=true
   fi
   
   if [ "$has_error" = true ]; then
     echo ""
-    echo "::warning::Git refs may not be properly set up. Diff operations might fail."
-    echo "The AI will be informed to handle diff errors gracefully."
+    echo "::error::❌ Git diff setup has errors. Validation may fail."
+    echo "The AI will attempt to use fallback methods, but results may be incomplete."
+    echo "::endgroup::"
+    return 1
+  else
     echo ""
+    echo "✅ Git diff setup verified successfully"
+    echo "::endgroup::"
+    return 0
   fi
 }
 
@@ -138,30 +194,85 @@ run_gemini() {
     echo "Prompt file size: $(wc -c < "$prompt_file") bytes"
     echo "Prompt file lines: $(wc -l < "$prompt_file") lines"
     
-    # Show the command being executed
-    echo "::group::🤖 Running Gemini CLI"
-    echo "Command: gemini -y -m $GEMINI_MODEL --prompt <prompt-content>"
+    # Show detailed execution info
+    echo "🤖 Running Gemini CLI"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Model: $GEMINI_MODEL"
+    echo "Prompt file: $prompt_file"
+    echo "Prompt size: $(wc -c < "$prompt_file") bytes"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "📤 Sending request to Gemini..."
     echo ""
     
-    # Run Gemini CLI and stream output while saving to file
-    # Using tee to display real-time output within the group while also saving to file
-    if gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md; then
-      echo "::endgroup::"
-      echo "✅ Validation completed successfully"
+    # Create a temporary file for stderr
+    local stderr_file="/tmp/gemini-stderr.log"
+    
+    # Run Gemini CLI with explicit output streaming
+    # - Send both stdout and stderr to console (via tee)
+    # - Save stdout to output file
+    # - Capture stderr separately for error analysis
+    set +e  # Temporarily disable exit on error to capture exit code
+    (
+      # Run gemini with unbuffered output
+      stdbuf -oL -eL gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" 2> >(tee "$stderr_file" >&2)
+    ) | tee /tmp/validation-full-output.md
+    
+    local exit_code=$?
+    set -e  # Re-enable exit on error
+    
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    if [ $exit_code -eq 0 ]; then
+      echo "✅ Gemini CLI completed successfully (exit code: 0)"
+      
+      # Show output file stats
+      if [ -f /tmp/validation-full-output.md ]; then
+        local output_size=$(wc -c < /tmp/validation-full-output.md)
+        local output_lines=$(wc -l < /tmp/validation-full-output.md)
+        echo "📊 Output: $output_lines lines, $output_size bytes"
+      fi
+      
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       return 0
     else
-      exit_code=$?
+      echo "❌ Gemini CLI failed (exit code: $exit_code)"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo ""
+      
+      # Show error details
+      echo "::group::❌ Error Details"
+      
+      if [ -f "$stderr_file" ]; then
+        echo "STDERR output:"
+        cat "$stderr_file"
+        echo ""
+      fi
+      
+      if [ -f /tmp/validation-full-output.md ]; then
+        echo "STDOUT output (first 100 lines):"
+        head -100 /tmp/validation-full-output.md
+        echo ""
+      fi
+      
       echo "::endgroup::"
-      echo "⚠️ Gemini CLI exited with code: $exit_code"
       
       # Check if it's a retryable error
-      if grep -q -E "(429|503|timeout|rate limit)" /tmp/validation-full-output.md; then
+      local is_retryable=false
+      if [ -f /tmp/validation-full-output.md ] && grep -q -E "(429|503|timeout|rate limit)" /tmp/validation-full-output.md; then
+        is_retryable=true
+      fi
+      if [ -f "$stderr_file" ] && grep -q -E "(429|503|timeout|rate limit)" "$stderr_file"; then
+        is_retryable=true
+      fi
+      
+      if [ "$is_retryable" = true ]; then
         retry_count=$((retry_count + 1))
         
         if [ $retry_count -le $max_retries ]; then
           wait_time=$((2 ** retry_count))
-          echo "Retrying after ${wait_time} seconds..."
+          echo "⏳ Rate limit or timeout detected. Retrying after ${wait_time} seconds..."
           sleep $wait_time
         else
           echo "::error::Maximum retries reached. Validation failed."
@@ -169,10 +280,7 @@ run_gemini() {
         fi
       else
         # Non-retryable error
-        echo "::error::Non-retryable error occurred"
-        echo "::group::❌ Gemini CLI Error Output"
-        cat /tmp/validation-full-output.md
-        echo "::endgroup::"
+        echo "::error::Non-retryable error occurred. See error details above."
         return 1
       fi
     fi
@@ -278,7 +386,9 @@ parse_results() {
 # Main execution
 main() {
   # Verify git refs before starting validation
-  verify_git_refs
+  if ! verify_git_refs; then
+    echo "::warning::Git diff verification failed. Continuing anyway, but validation may fail."
+  fi
   
   # Determine which prompt file to use
   local actual_prompt_file=""

@@ -408,6 +408,7 @@ runs:
         # Remove temporary files containing sensitive data
         rm -f /tmp/service-account.json
         rm -f /tmp/gemini-settings.json
+        rm -f /tmp/gemini-stderr.log
         echo "✅ Temporary files cleaned up"
     
     - name: Fail on Critical Violations
