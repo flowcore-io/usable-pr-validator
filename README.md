@@ -704,21 +704,73 @@ Prompt size: XXXX bytes
 # 📊 5 files changed
 ```
 
-**If still failing**:
+**Common Mistake - Detached HEAD**:
+
+If you're checking out with a specific SHA, this creates a detached HEAD state that breaks diff operations:
 
 ```yaml
-# Option 1: Ensure full git history is fetched
+# ❌ WRONG - Creates detached HEAD
+- uses: actions/checkout@v4
+  with:
+    ref: ${{ github.event.pull_request.head.sha }}
+    fetch-depth: 0
+
+# ✅ CORRECT - Let checkout handle the ref automatically
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0  # This is all you need for PRs
+```
+
+**If you MUST use a specific ref**:
+
+```yaml
+# Option 1: Don't specify ref for PR workflows
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
-    ref: ${{ github.event.pull_request.head.sha }}
 
-# Option 2: Explicitly fetch both refs
-- name: Fetch refs
+# Option 2: Explicitly fetch both refs after checkout
+- uses: actions/checkout@v4
+  with:
+    ref: ${{ github.event.pull_request.head.sha }}
+    fetch-depth: 0
+
+- name: Fetch branch refs
   run: |
-    git fetch origin ${{ github.event.pull_request.base.ref }}
-    git fetch origin ${{ github.event.pull_request.head.ref }}
+    git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
+    git fetch origin ${{ github.event.pull_request.head.ref }}:refs/remotes/origin/${{ github.event.pull_request.head.ref }}
 ```
+
+### MCP Tools Not Available
+
+**Symptom**: Error messages like `Tool "search_memory_fragments" not found in registry` or AI sees wrong tools (`search_file_content`, `read_many_files` instead of Usable Memory tools)
+
+**Root Cause**: MCP server not receiving workspace-id context, so it returns generic tools instead of Usable-specific memory tools
+
+**Solution** (Fixed in v1.6.0+):
+
+The action now automatically passes `workspace-id` to the MCP server via the `x-workspace-id` header. Ensure you're using the latest version:
+
+```yaml
+- uses: flowcore-io/usable-pr-validator@v1.6.0  # or @latest
+  with:
+    workspace-id: '60c10ca2-4115-4c1a-b6d7-04ac39fd3938'  # Required!
+```
+
+**If using older versions**, update to v1.6.0+ or manually verify:
+
+1. `workspace-id` input is provided in your workflow
+2. Action passes `WORKSPACE_ID` environment variable to MCP setup
+3. MCP settings include `x-workspace-id` header in configuration
+
+**Expected MCP tools** when working correctly:
+
+- `agentic-search-fragments`
+- `search-memory-fragments`
+- `get-memory-fragment-content`
+- `explore-workspace-graph`
+- `create-memory-fragment`
+- `update-memory-fragment`
 
 ### Validation Fails Immediately
 

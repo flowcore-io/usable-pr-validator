@@ -288,6 +288,7 @@ runs:
       env:
         MCP_URL: ${{ inputs.mcp-server-url }}
         MCP_SECRET_NAME: ${{ inputs.mcp-token-secret }}
+        WORKSPACE_ID: ${{ inputs.workspace-id }}
       run: |
         ${{ github.action_path }}/scripts/setup-mcp.sh
     
@@ -323,6 +324,7 @@ runs:
         OVERRIDE_COMMENT: ${{ inputs.override-comment }}
         COMMENT_AUTHOR: ${{ env.COMMENT_AUTHOR }}
         ALLOW_WEB_FETCH: ${{ inputs.allow-web-fetch }}
+        GIT_PAGER: cat
       run: |
         ${{ github.action_path }}/scripts/validate.sh
     

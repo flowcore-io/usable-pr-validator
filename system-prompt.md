@@ -16,7 +16,7 @@
 ### ⚠️ VERIFY FILE CONTENTS
 
 - **READ** the actual file contents before claiming violations
-- **USE** `git diff` to see what actually changed
+- **USE** `git --no-pager diff` to see what actually changed
 - **DO NOT** make assumptions about code without reading it
 - **VERIFY** line numbers are accurate
 
@@ -193,7 +193,7 @@ After documenting the deviation:
    - Identify the type of change (feature, fix, refactor, etc.)
 
 2. **Analyze Changes**
-   - Get the diff: `git diff origin/{base_branch}...{head_branch}`
+   - Get the diff: `git --no-pager diff origin/{base_branch}...{head_branch}`
    - Identify all changed files
    - Understand the scope and impact
 
@@ -203,9 +203,9 @@ After documenting the deviation:
 
    - **First**: Try using the helper script: `bash scripts/get-pr-diff.sh files` (for file list)
    - **Second**: Try alternative diff formats:
-     - Three-dot: `git diff origin/{base}...{head}` (shows changes in head since diverging from base)
-     - Two-dot: `git diff origin/{base}..{head}` (shows all differences between commits)
-     - Direct refs: `git diff origin/{base} {head}`
+     - Three-dot: `git --no-pager diff origin/{base}...{head}` (shows changes in head since diverging from base)
+     - Two-dot: `git --no-pager diff origin/{base}..{head}` (shows all differences between commits)
+     - Direct refs: `git --no-pager diff origin/{base} {head}`
    - **Third**: If all diff methods fail, inform the user in your report:
 
      ```markdown
@@ -219,7 +219,7 @@ After documenting the deviation:
      **To resolve this**, please ensure:
      1. Both base and head branches are accessible
      2. The action has proper permissions to fetch refs
-     3. You can manually provide the diff using: `git diff --name-only {base}...{head}`
+     3. You can manually provide the diff using: `git --no-pager diff --name-only {base}...{head}`
 
      I cannot complete validation without the diff information.
      ```

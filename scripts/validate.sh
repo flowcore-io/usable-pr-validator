@@ -364,7 +364,14 @@ parse_results() {
   fi
   
   # Count critical issues (looking for unchecked critical violations)
+  # Strip any whitespace/newlines and ensure we get a clean integer
   critical_issues=$(grep -c "^- \[ \] \*\*" "$report_file" 2>/dev/null || echo "0")
+  critical_issues=$(echo "$critical_issues" | tr -d '\n\r' | tr -d ' ')
+  
+  # Ensure we have a valid integer (default to 0 if empty or invalid)
+  if ! [[ "$critical_issues" =~ ^[0-9]+$ ]]; then
+    critical_issues=0
+  fi
   
   # If status is fail but no critical issues found, set to 1
   if [ "$validation_status" = "failed" ] && [ "$critical_issues" -eq 0 ]; then
