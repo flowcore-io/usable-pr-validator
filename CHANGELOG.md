@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0](https://github.com/flowcore-io/usable-pr-validator/compare/v1.4.0...v1.5.0) (2025-10-12)
+
+
+### Features
+
+* **scripts:** add fix-tag-and-push script for managing 'latest' tag ([5bfe2f8](https://github.com/flowcore-io/usable-pr-validator/commit/5bfe2f8919167aa0b12fa3fe25c5d57b3e32fdcf))
+* **tests:** add diagnostic script for git diff issues and enhance validation output ([51fe80b](https://github.com/flowcore-io/usable-pr-validator/commit/51fe80bf5bf6b76a5403ad994f5e5b12d1822f5b))
+
+
+### Bug Fixes
+
+* **scripts:** :wrench: fix ShellCheck SC2155 warnings and add tag fix script ([0a79912](https://github.com/flowcore-io/usable-pr-validator/commit/0a79912ed2c3a480358795a4a36347dc39a1b31c))
+
 ## [1.4.0](https://github.com/flowcore-io/usable-pr-validator/compare/v1.3.0...v1.4.0) (2025-10-10)
 
 
