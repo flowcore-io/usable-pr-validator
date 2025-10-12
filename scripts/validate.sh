@@ -20,7 +20,8 @@ verify_git_refs() {
   for ref_format in "origin/$base" "$base" "refs/heads/$base" "refs/remotes/origin/$base"; do
     if git rev-parse "$ref_format" >/dev/null 2>&1; then
       echo "✅ Base ref available: $ref_format"
-      local base_commit=$(git rev-parse "$ref_format")
+      local base_commit
+      base_commit=$(git rev-parse "$ref_format")
       echo "   Commit: $base_commit"
       base_resolved=true
       break
@@ -41,7 +42,8 @@ verify_git_refs() {
   for ref_format in "origin/$head" "$head" "HEAD" "refs/heads/$head" "refs/remotes/origin/$head"; do
     if git rev-parse "$ref_format" >/dev/null 2>&1; then
       echo "✅ Head ref available: $ref_format"
-      local head_commit=$(git rev-parse "$ref_format")
+      local head_commit
+      head_commit=$(git rev-parse "$ref_format")
       echo "   Commit: $head_commit"
       head_resolved=true
       break
@@ -62,15 +64,18 @@ verify_git_refs() {
   # Test three-dot diff (what AI will use)
   if git diff --name-only "origin/$base...origin/$head" >/dev/null 2>&1; then
     echo "✅ Three-dot diff works: origin/$base...origin/$head"
-    local file_count=$(git diff --name-only "origin/$base...origin/$head" | wc -l)
+    local file_count
+    file_count=$(git diff --name-only "origin/$base...origin/$head" | wc -l)
     echo "   Files changed: $file_count"
   elif git diff --name-only "origin/$base..$head" >/dev/null 2>&1; then
     echo "⚠️  Three-dot diff failed, but two-dot diff works"
-    local file_count=$(git diff --name-only "origin/$base..$head" | wc -l)
+    local file_count
+    file_count=$(git diff --name-only "origin/$base..$head" | wc -l)
     echo "   Files changed: $file_count"
   elif git diff --name-only "$base...$head" >/dev/null 2>&1; then
     echo "⚠️  Standard diff works without origin/ prefix"
-    local file_count=$(git diff --name-only "$base...$head" | wc -l)
+    local file_count
+    file_count=$(git diff --name-only "$base...$head" | wc -l)
     echo "   Files changed: $file_count"
   else
     echo "::error::❌ Git diff command failed!"
@@ -229,8 +234,10 @@ run_gemini() {
       
       # Show output file stats
       if [ -f /tmp/validation-full-output.md ]; then
-        local output_size=$(wc -c < /tmp/validation-full-output.md)
-        local output_lines=$(wc -l < /tmp/validation-full-output.md)
+        local output_size
+        local output_lines
+        output_size=$(wc -c < /tmp/validation-full-output.md)
+        output_lines=$(wc -l < /tmp/validation-full-output.md)
         echo "📊 Output: $output_lines lines, $output_size bytes"
       fi
       
