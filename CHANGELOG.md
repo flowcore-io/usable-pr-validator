@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.2](https://github.com/flowcore-io/usable-pr-validator/compare/v1.5.1...v1.5.2) (2025-10-13)
+
+
+### Bug Fixes
+
+* test feature branch validation ([9dc3479](https://github.com/flowcore-io/usable-pr-validator/commit/9dc34793b879dd135d4c5238c9bfb1411a426a8b))
+* test feature branch validation ([ed7af84](https://github.com/flowcore-io/usable-pr-validator/commit/ed7af84cba79da6c6316bdb60f07a15af6dd4da4))
+* **validate.sh:** add a newline at the end of the script for better compatibility ([4246f34](https://github.com/flowcore-io/usable-pr-validator/commit/4246f34409cbf79f589d0e4753e42524487d74cc))
+* **validate.sh:** enhance output handling and extraction for Gemini CLI ([2036ab5](https://github.com/flowcore-io/usable-pr-validator/commit/2036ab59c92a5931dd84aad6666416ab0b37b6a8))
+* **validate.sh:** improve Gemini CLI output handling and error reporting ([3ef920d](https://github.com/flowcore-io/usable-pr-validator/commit/3ef920d98d7143f6f6db31078cb2c9578e8b5b4a))
+* **validate.sh:** simplify Gemini CLI output handling and remove unnecessary complexity ([86871a6](https://github.com/flowcore-io/usable-pr-validator/commit/86871a629b0be807cb5fd1c0460fcbfa48d34661))
+
 ## [1.5.1](https://github.com/flowcore-io/usable-pr-validator/compare/v1.5.0...v1.5.1) (2025-10-12)
 
 
