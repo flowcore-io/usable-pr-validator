@@ -203,86 +203,18 @@ run_gemini() {
     echo "🤖 Running Gemini CLI"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Model: $GEMINI_MODEL"
-    echo "Prompt file: $prompt_file"
     echo "Prompt size: $(wc -c < "$prompt_file") bytes"
-    echo "Command: gemini -y -m $GEMINI_MODEL --prompt <prompt_content>"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "::group::📋 Prompt Content Preview (first 50 lines)"
-    head -50 "$prompt_file"
-    echo "::endgroup::"
-    echo ""
-    echo "📤 Sending request to Gemini..."
-    echo ""
     
-    # Create temporary files for output capture
-    local combined_output="/tmp/gemini-combined-output.log"
-    local clean_output="/tmp/gemini-clean-output.log"
-    
-    # Run Gemini CLI with explicit output streaming
-    # Show EVERYTHING - raw, unfiltered output in chronological order
-    echo "::group::🤖 Gemini CLI Complete Raw Output (stdout + stderr merged)"
-    echo "════════════════════════════════════════"
-    echo "COMPLETE RAW OUTPUT FROM GEMINI CLI:"
-    echo "This shows ALL output in the order it appears"
-    echo "════════════════════════════════════════"
-    echo ""
-    
+    # Run Gemini CLI and capture output
     set +e  # Temporarily disable exit on error to capture exit code
     
-    # Run gemini and capture EVERYTHING (stdout + stderr merged), display it, and save it
-    # Using 2>&1 merges stderr into stdout so we see everything in chronological order
-    gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" 2>&1 | tee "$combined_output"
+    # Just use tee to show and save output - simple and effective
+    gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
     local exit_code=$?
     
-    echo ""
-    echo "════════════════════════════════════════"
-    if [ -f "$combined_output" ]; then
-      echo "Combined output: $(wc -l < "$combined_output") lines, $(wc -c < "$combined_output") bytes"
-    fi
-    echo "════════════════════════════════════════"
-    
     set -e  # Re-enable exit on error
-    echo "::endgroup::"
-    
-    # Extract just the AI response (clean output) from the combined output
-    # The AI response typically starts after all the status messages
-    # We need to skip lines like "Loaded cached credentials", "MCP ERROR", etc.
-    if [ -f "$combined_output" ]; then
-      # Strategy: Look for the start of markdown content (lines starting with # or ##)
-      # Skip all the CLI status messages at the beginning
-      echo ""
-      echo "::group::📄 Extracted AI Response (clean)"
-      
-      # Try to find where the actual AI response starts
-      # Look for common patterns like "# " at start of line
-      if grep -q "^# " "$combined_output"; then
-        # Extract from first markdown header onwards
-        sed -n '/^# /,$p' "$combined_output" > "$clean_output"
-        echo "✅ Extracted AI response starting from markdown header"
-      else
-        # Fallback: just copy everything (in case format is different)
-        cp "$combined_output" "$clean_output"
-        echo "⚠️ No markdown header found, using full output"
-      fi
-      
-      if [ -f "$clean_output" ] && [ -s "$clean_output" ]; then
-        echo "════════════════════════════════════════"
-        cat "$clean_output"
-        echo ""
-        echo "════════════════════════════════════════"
-        echo "Clean output: $(wc -l < "$clean_output") lines, $(wc -c < "$clean_output") bytes"
-        echo "════════════════════════════════════════"
-        
-        # Copy clean output to expected location
-        cp "$clean_output" /tmp/validation-full-output.md
-      else
-        echo "⚠️ No clean output extracted, using combined output"
-        cp "$combined_output" /tmp/validation-full-output.md
-      fi
-      
-      echo "::endgroup::"
-    fi
     
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -296,12 +228,12 @@ run_gemini() {
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo ""
       
-      # Error details are already shown above in the raw output sections
-      echo "⚠️ Check the raw output sections above for error details"
+      # Error details are shown above in the output
+      echo "⚠️ Check the output above for error details"
       
       # Check if it's a retryable error
       local is_retryable=false
-      if [ -f "$combined_output" ] && grep -q -E "(429|503|timeout|rate limit)" "$combined_output"; then
+      if [ -f /tmp/validation-full-output.md ] && grep -q -E "(429|503|timeout|rate limit)" /tmp/validation-full-output.md; then
         is_retryable=true
       fi
       
