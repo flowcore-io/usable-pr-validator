@@ -217,6 +217,7 @@ run_gemini() {
     # - Send both stdout and stderr to console (via tee)
     # - Save stdout to output file
     # - Capture stderr separately for error analysis
+    echo "::group::🤖 Gemini CLI Output (Live)"
     set +e  # Temporarily disable exit on error to capture exit code
     (
       # Run gemini with unbuffered output
@@ -225,6 +226,7 @@ run_gemini() {
     
     local exit_code=$?
     set -e  # Re-enable exit on error
+    echo "::endgroup::"
     
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -239,6 +241,12 @@ run_gemini() {
         output_size=$(wc -c < /tmp/validation-full-output.md)
         output_lines=$(wc -l < /tmp/validation-full-output.md)
         echo "📊 Output: $output_lines lines, $output_size bytes"
+        
+        # Show the full output in a collapsible group
+        echo ""
+        echo "::group::📄 Complete Gemini Output ($(wc -l < /tmp/validation-full-output.md) lines)"
+        cat /tmp/validation-full-output.md
+        echo "::endgroup::"
       fi
       
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
