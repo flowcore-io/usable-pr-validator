@@ -205,50 +205,69 @@ run_gemini() {
     echo "Model: $GEMINI_MODEL"
     echo "Prompt file: $prompt_file"
     echo "Prompt size: $(wc -c < "$prompt_file") bytes"
+    echo "Command: gemini -y -m $GEMINI_MODEL --prompt <prompt_content>"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "::group::📋 Prompt Content Preview (first 50 lines)"
+    head -50 "$prompt_file"
+    echo "::endgroup::"
     echo ""
     echo "📤 Sending request to Gemini..."
     echo ""
     
     # Create a temporary file for stderr
     local stderr_file="/tmp/gemini-stderr.log"
+    local stdout_file="/tmp/gemini-stdout.log"
     
     # Run Gemini CLI with explicit output streaming
-    # - Send both stdout and stderr to console (via tee)
-    # - Save stdout to output file
-    # - Capture stderr separately for error analysis
-    echo "::group::🤖 Gemini CLI Output (Live)"
+    # Show EVERYTHING - raw, unfiltered output
+    echo "::group::🤖 Gemini CLI Raw Output (STDOUT)"
     set +e  # Temporarily disable exit on error to capture exit code
-    (
-      # Run gemini with unbuffered output
-      stdbuf -oL -eL gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" 2> >(tee "$stderr_file" >&2)
-    ) | tee /tmp/validation-full-output.md
     
+    # Run gemini and capture both stdout and stderr separately
+    gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" > "$stdout_file" 2> "$stderr_file"
     local exit_code=$?
+    
+    # Display raw stdout
+    if [ -f "$stdout_file" ]; then
+      echo "════════════════════════════════════════"
+      echo "RAW STDOUT FROM GEMINI CLI:"
+      echo "════════════════════════════════════════"
+      cat "$stdout_file"
+      echo ""
+      echo "════════════════════════════════════════"
+      echo "STDOUT: $(wc -l < "$stdout_file") lines, $(wc -c < "$stdout_file") bytes"
+      echo "════════════════════════════════════════"
+      
+      # Copy to the expected output location
+      cp "$stdout_file" /tmp/validation-full-output.md
+    else
+      echo "⚠️ No stdout file generated"
+    fi
+    
     set -e  # Re-enable exit on error
     echo "::endgroup::"
+    
+    # Show stderr if there's content
+    if [ -f "$stderr_file" ] && [ -s "$stderr_file" ]; then
+      echo ""
+      echo "::group::🔴 Gemini CLI Raw Output (STDERR)"
+      echo "════════════════════════════════════════"
+      echo "RAW STDERR FROM GEMINI CLI:"
+      echo "════════════════════════════════════════"
+      cat "$stderr_file"
+      echo ""
+      echo "════════════════════════════════════════"
+      echo "STDERR: $(wc -l < "$stderr_file") lines, $(wc -c < "$stderr_file") bytes"
+      echo "════════════════════════════════════════"
+      echo "::endgroup::"
+    fi
     
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
     if [ $exit_code -eq 0 ]; then
       echo "✅ Gemini CLI completed successfully (exit code: 0)"
-      
-      # Show output file stats
-      if [ -f /tmp/validation-full-output.md ]; then
-        local output_size
-        local output_lines
-        output_size=$(wc -c < /tmp/validation-full-output.md)
-        output_lines=$(wc -l < /tmp/validation-full-output.md)
-        echo "📊 Output: $output_lines lines, $output_size bytes"
-        
-        # Show the full output in a collapsible group
-        echo ""
-        echo "::group::📄 Complete Gemini Output ($(wc -l < /tmp/validation-full-output.md) lines)"
-        cat /tmp/validation-full-output.md
-        echo "::endgroup::"
-      fi
-      
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       return 0
     else
@@ -256,26 +275,12 @@ run_gemini() {
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo ""
       
-      # Show error details
-      echo "::group::❌ Error Details"
-      
-      if [ -f "$stderr_file" ]; then
-        echo "STDERR output:"
-        cat "$stderr_file"
-        echo ""
-      fi
-      
-      if [ -f /tmp/validation-full-output.md ]; then
-        echo "STDOUT output (first 100 lines):"
-        head -100 /tmp/validation-full-output.md
-        echo ""
-      fi
-      
-      echo "::endgroup::"
+      # Error details are already shown above in the raw output sections
+      echo "⚠️ Check the raw output sections above for error details"
       
       # Check if it's a retryable error
       local is_retryable=false
-      if [ -f /tmp/validation-full-output.md ] && grep -q -E "(429|503|timeout|rate limit)" /tmp/validation-full-output.md; then
+      if [ -f "$stdout_file" ] && grep -q -E "(429|503|timeout|rate limit)" "$stdout_file"; then
         is_retryable=true
       fi
       if [ -f "$stderr_file" ] && grep -q -E "(429|503|timeout|rate limit)" "$stderr_file"; then
