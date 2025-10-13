@@ -917,3 +917,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 - 💬 [Discussions](https://github.com/flowcore/usable-pr-validator/discussions)
 
 Made with ❤️ by [Flowcore](https://flowcore.io)
+
