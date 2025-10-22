@@ -381,9 +381,10 @@ parse_results() {
   local validation_status
   local validation_passed
   local critical_issues
+  local status
   
   # Get status from JSON
-  local status=$(jq -r '.validationOutcome.status' "$json_file")
+  status=$(jq -r '.validationOutcome.status' "$json_file")
   
   if [ "$status" = "PASS" ]; then
     validation_status="passed"
