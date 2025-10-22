@@ -34,7 +34,7 @@ on:
         description: 'Model to use'
         required: false
         type: string
-        default: 'openai/gpt-oss-120b'
+        default: 'anthropic/claude-haiku-4.5'
       comment-title:
         description: 'Title for the validation comment'
         required: false
@@ -285,7 +285,7 @@ jobs:
           workspace-id: ${{ inputs.workspace-id || '60c10ca2-4115-4c1a-b6d7-04ac39fd3938' }}
           base-ref: ${{ steps.base-ref.outputs.base-ref }}
           provider: ${{ inputs.provider || 'auto' }}
-          model: ${{ inputs.model || 'openai/gpt-oss-120b' }}
+          model: ${{ inputs.model || 'anthropic/claude-haiku-4.5' }}
           comment-title: ${{ inputs.comment-title || '🔄 Revalidation (Comment Triggered)' }}
           comment-mode: 'create'
           fail-on-critical: ${{ inputs.fail-on-critical || false }}

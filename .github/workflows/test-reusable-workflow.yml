@@ -24,7 +24,7 @@ jobs:
       workspace-id: '60c10ca2-4115-4c1a-b6d7-04ac39fd3938'
       prompt-file: 'templates/basic-validation.md'
       provider: 'auto'
-      model: 'openai/gpt-oss-120b'
+      model: 'anthropic/claude-haiku-4.5'
       comment-title: '🧪 Reusable Workflow Test'
       fail-on-critical: false
     secrets:
@@ -64,7 +64,7 @@ jobs:
           - Workspace ID: 60c10ca2-4115-4c1a-b6d7-04ac39fd3938
           - Prompt File: templates/basic-validation.md
           - Provider: auto
-          - Model: openai/gpt-oss-120b
+          - Model: anthropic/claude-haiku-4.5
           - Comment Title: 🧪 Reusable Workflow Test
 
           **Result**: ${{ needs.test-reusable.result }}
@@ -78,7 +78,7 @@ jobs:
           uses: flowcore/usable-pr-validator/.github/workflows/comment-revalidation.yml@v1
           with:
             workspace-id: 'their-workspace-uuid'
-            # Optional - defaults to auto and openai/gpt-oss-120b
+            # Optional - defaults to auto and anthropic/claude-haiku-4.5
             # provider: 'openrouter'  # or 'anthropic', 'openai', 'auto'
             # model: 'anthropic/claude-3.7-sonnet'  # for higher quality
           secrets:

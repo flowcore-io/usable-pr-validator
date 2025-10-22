@@ -35,7 +35,7 @@ fi
 
 # Set default values for local testing
 export PROVIDER="${PROVIDER:-auto}"
-export MODEL="${MODEL:-openai/gpt-oss-120b}"
+export MODEL="${MODEL:-anthropic/claude-haiku-4.5}"
 export WORKSPACE_ID="${WORKSPACE_ID:-60c10ca2-4115-4c1a-b6d7-04ac39fd3938}"  # Flowcore workspace
 export MCP_SERVER_URL="${MCP_SERVER_URL:-https://usable.dev/api/mcp}"
 

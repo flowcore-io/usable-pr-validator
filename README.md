@@ -90,7 +90,7 @@ jobs:
         with:
           prompt-file: '.github/prompts/pr-validation.md'
           workspace-id: 'your-workspace-uuid'
-          # Optional: specify provider and model (defaults to auto-detect and openai/gpt-oss-120b)
+          # Optional: specify provider and model (defaults to auto-detect and anthropic/claude-haiku-4.5)
           # provider: 'openrouter'  # or 'anthropic', 'openai', 'auto'
           # model: 'anthropic/claude-3.7-sonnet'  # for higher quality
         env:
@@ -119,7 +119,7 @@ export USABLE_API_TOKEN='your-usable-token'
 
 # Optional (can be set in the script or use defaults)
 export PROVIDER='auto'                               # or 'openrouter', 'anthropic', 'openai'
-export MODEL='openai/gpt-oss-120b'                       # default model (fast and cost-effective)
+export MODEL='anthropic/claude-haiku-4.5'                       # default model (fast and cost-effective)
 export WORKSPACE_ID='your-workspace-uuid'           # Usable workspace
 export BASE_BRANCH='main'                           # base branch for diff
 export HEAD_BRANCH='feature-branch'                 # current branch
@@ -161,7 +161,7 @@ The script will:
 | `workspace-id` | Usable workspace UUID (required - used to fetch MCP system prompt) | ✓ | |
 | `merge-custom-prompt` | Merge fetched Usable prompt with custom `prompt-file` (only when both are provided) | | `true` |
 | `provider` | LLM provider: `openrouter`, `openai`, `anthropic`, or `auto` (auto-detect from env vars) | | `auto` |
-| `model` | Model to use (e.g., `openai/gpt-oss-120b`, `anthropic/claude-3.7-sonnet`, `openai/gpt-4`, `meta-llama/llama-3.3-70b-instruct`) | | `openai/gpt-oss-120b` |
+| `model` | Model to use (e.g., `anthropic/claude-haiku-4.5`, `anthropic/claude-3.7-sonnet`, `openai/gpt-4`, `meta-llama/llama-3.3-70b-instruct`) | | `anthropic/claude-haiku-4.5` |
 | `api-key-secret` | Name of secret containing API key | | `OPENROUTER_API_KEY` |
 | `mcp-server-url` | Usable MCP server URL | | `https://usable.dev/api/mcp` |
 | `mcp-token-secret` | Secret name for Usable API token | | `USABLE_API_TOKEN` |
