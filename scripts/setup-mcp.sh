@@ -30,19 +30,17 @@ fi
 # Remove any existing usable MCP server first (to avoid duplicates)
 forge mcp remove usable 2>/dev/null || echo "  No existing usable server to remove"
 
-# Add Usable MCP server using the official @usabledev/mcp-server package
-# This uses stdio transport and handles authentication via environment variables
+# Add Usable MCP server using HTTP transport with Authorization header
+# ForgeCode requires JSON configuration to pass HTTP headers
 echo "Adding Usable MCP server to ForgeCode..."
-forge mcp add usable "npx" \
-  --transport stdio \
-  --scope local \
-  --args "@usabledev/mcp-server@latest" \
-  --args "server" \
-  --env "USABLE_API_TOKEN=$MCP_TOKEN" \
-  --env "USABLE_BASE_URL=$MCP_URL" 2>&1
+echo "  URL: $MCP_URL"
+echo "  Auth: Bearer token (configured)"
+
+# Use forge mcp add-json to configure HTTP transport with Authorization header
+forge mcp add-json "usable" "{\"url\":\"$MCP_URL\",\"headers\":{\"Authorization\":\"Bearer $MCP_TOKEN\"}}" 2>&1
 
 echo "✅ MCP server configured for ForgeCode"
-echo "  Package: @usabledev/mcp-server@latest"
+echo "  Transport: HTTP with Authorization header"
 echo "  Base URL: $MCP_URL"
 
 # List configured servers for verification
