@@ -410,6 +410,7 @@ runs:
         # Remove temporary files containing sensitive data
         rm -f /tmp/forge-config.yaml
         rm -f /tmp/validation-*.md
+        rm -f .mcp.json  # Remove MCP config with authentication token
         echo "✅ Temporary files cleaned up"
     
     - name: Fail on Critical Violations

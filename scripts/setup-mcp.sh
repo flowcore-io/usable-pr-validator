@@ -17,24 +17,35 @@ MCP_ENDPOINT="${USABLE_URL}/api/mcp"
 echo "Usable URL: $USABLE_URL"
 echo "MCP Endpoint: $MCP_ENDPOINT"
 
-# Remove any existing usable MCP server first (to avoid duplicates)
-forge mcp remove usable 2>/dev/null || echo "  No existing usable server to remove"
+# Write .mcp.json file in the working directory with authentication
+# ForgeCode loads MCP servers from .mcp.json in the current directory
+echo "Writing .mcp.json configuration..."
 
-# Add Usable MCP server using HTTP transport with Authorization header
-# ForgeCode requires JSON configuration to pass HTTP headers
-echo "Adding Usable MCP server to ForgeCode..."
+# Create the .mcp.json file with the Usable MCP server configuration
+cat > .mcp.json <<EOF
+{
+  "mcpServers": {
+    "usable": {
+      "url": "$MCP_ENDPOINT",
+      "headers": {
+        "Authorization": "Bearer $USABLE_API_TOKEN"
+      }
+    }
+  }
+}
+EOF
+
+echo "✅ MCP server configured in .mcp.json"
 echo "  Endpoint: $MCP_ENDPOINT"
 echo "  Auth: Bearer token (configured)"
 
-# Use forge mcp add-json to configure HTTP transport with Authorization header
-forge mcp add-json "usable" "{\"url\":\"$MCP_ENDPOINT\",\"headers\":{\"Authorization\":\"Bearer $USABLE_API_TOKEN\"}}" 2>&1
-
-echo "✅ MCP server configured for ForgeCode"
-echo "  Transport: HTTP with Authorization header"
-echo "  Endpoint: $MCP_ENDPOINT"
-
-# List configured servers for verification
-echo "  Configured MCP servers:"
-forge mcp list 2>&1 | sed 's/^/    /' || echo "    (Unable to list servers)"
+# Verify the configuration
+if [ -f ".mcp.json" ]; then
+  echo "  Configuration file created successfully"
+  echo "  MCP server 'usable' will be available to ForgeCode"
+else
+  echo "::error::Failed to create .mcp.json"
+  exit 1
+fi
 
 echo "::endgroup::"
