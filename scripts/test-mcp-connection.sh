@@ -14,11 +14,25 @@ echo "✅ .mcp.json file found"
 echo ""
 echo "Configuration:"
 # Show config without exposing token
-jq '.mcpServers | to_entries[] | {name: .key, url: .value.url, hasAuth: (.value.headers.Authorization != null)}' .mcp.json
+jq '.mcpServers | to_entries[] | {name: .key, command: .value.command, hasToken: (.value.env.USABLE_API_TOKEN != null)}' .mcp.json
 
 echo ""
 echo "Creating MCP test prompt..."
 
+# Setup provider configuration first (same as validate.sh)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo ""
+echo "Setting up provider configuration..."
+if [ -f "$SCRIPT_DIR/setup-provider.sh" ]; then
+  source "$SCRIPT_DIR/setup-provider.sh" || {
+    echo "::error::Failed to setup provider"
+    exit 1
+  }
+else
+  echo "::warning::setup-provider.sh not found, skipping provider setup"
+fi
+
+echo ""
 # Create a simple test prompt that lists available tools
 cat > /tmp/mcp-test-prompt.txt <<'EOF'
 # MCP Connection Test
