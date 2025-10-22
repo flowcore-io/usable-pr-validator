@@ -27,31 +27,26 @@ if [ -z "$MCP_URL" ]; then
   exit 1
 fi
 
-# Create ForgeCode MCP configuration
-# ForgeCode looks for MCP config in forge.yaml or can use environment variables
-cat > /tmp/forge-mcp-config.yaml <<EOF
-mcp_servers:
-  usable:
-    http_url: "$MCP_URL"
-    headers:
-      Authorization: "Bearer $MCP_TOKEN"
-EOF
+# Remove any existing usable MCP server first (to avoid duplicates)
+forge mcp remove usable 2>/dev/null || echo "  No existing usable server to remove"
 
-# Set restrictive permissions
-chmod 600 /tmp/forge-mcp-config.yaml
-
-# Export as environment variable for forge to pick up
-export FORGE_MCP_CONFIG="/tmp/forge-mcp-config.yaml"
-if [ -n "${GITHUB_ENV:-}" ]; then
-  echo "FORGE_MCP_CONFIG=/tmp/forge-mcp-config.yaml" >> "$GITHUB_ENV"
-fi
+# Add Usable MCP server using the official @usabledev/mcp-server package
+# This uses stdio transport and handles authentication via environment variables
+echo "Adding Usable MCP server to ForgeCode..."
+forge mcp add usable "npx" \
+  --transport stdio \
+  --scope local \
+  --args "@usabledev/mcp-server@latest" \
+  --args "server" \
+  --env "USABLE_API_TOKEN=$MCP_TOKEN" \
+  --env "USABLE_BASE_URL=$MCP_URL" 2>&1
 
 echo "✅ MCP server configured for ForgeCode"
-echo "  URL: $MCP_URL"
-echo "  Config file: /tmp/forge-mcp-config.yaml"
+echo "  Package: @usabledev/mcp-server@latest"
+echo "  Base URL: $MCP_URL"
 
-# Debug: Show settings file content (mask token)
-echo "  Configuration preview:"
-cat /tmp/forge-mcp-config.yaml | sed 's/Bearer [^"]*$/Bearer ***MASKED***/g' | sed 's/^/    /'
+# List configured servers for verification
+echo "  Configured MCP servers:"
+forge mcp list 2>&1 | sed 's/^/    /' || echo "    (Unable to list servers)"
 
 echo "::endgroup::"
