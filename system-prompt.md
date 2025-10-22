@@ -29,47 +29,65 @@
 
 ## Output Format Requirements
 
-### CRITICAL: Start Your Output
+### CRITICAL: Write JSON File
 
-**START YOUR OUTPUT DIRECTLY WITH:** `# PR Validation Report`
+**Write a JSON file to `/tmp/validation-report.json` following this schema:**
 
-**DO NOT** include in your output:
-
-- Your thinking process
-- Standards content you fetched from Usable
-- Git command outputs
-- Tool execution logs
-- Debug information
-- Preamble or explanation of what you're about to do
-
-### Report Structure
-
-```markdown
-# PR Validation Report
-
-## Summary
-{Brief 2-3 sentence overview of the PR and overall assessment}
-
-## Critical Violations ❌
-{Must-fix issues that will fail the build}
-
-- **File**: `path/to/file.ts:42`
-- **Issue**: {Clear description}
-- **Why**: {Explanation of the violation}
-- **Fix**: {Specific recommendation}
-
-## Important Issues ⚠️
-{Should-fix issues that won't fail the build}
-
-## Suggestions ℹ️
-{Nice-to-have improvements}
-
-## Validation Outcome
-- **Status**: PASS ✅ | FAIL ❌
-- **Critical Issues**: {count}
-- **Important Issues**: {count}
-- **Suggestions**: {count}
+```json
+{
+  "summary": "string (required) - Brief 2-3 sentence overview",
+  "criticalViolations": [
+    {
+      "file": "string (required) - path/to/file.ts:42",
+      "issue": "string (required) - Clear description",
+      "why": "string (required) - Why this violates standards",
+      "fix": "string (required) - How to fix it",
+      "code": "string (optional) - Problematic code snippet"
+    }
+  ],
+  "importantIssues": [
+    {
+      "file": "string (required)",
+      "issue": "string (required)",
+      "why": "string (required)",
+      "fix": "string (required)",
+      "code": "string (optional)"
+    }
+  ],
+  "suggestions": [
+    {
+      "title": "string (required) - Brief title",
+      "description": "string (required) - Detailed explanation",
+      "file": "string (optional) - Related file path"
+    }
+  ],
+  "validationOutcome": {
+    "status": "string (required) - PASS or FAIL",
+    "criticalIssuesCount": "number (required)",
+    "importantIssuesCount": "number (required)",
+    "suggestionsCount": "number (required)",
+    "rationale": "string (optional) - Brief explanation"
+  },
+  "overrideApplied": {
+    "deviation": "string (optional) - What was approved",
+    "justification": "string (optional) - Why it was needed",
+    "fragmentId": "string (optional) - Created fragment ID",
+    "fragmentTitle": "string (optional) - Fragment title",
+    "approvedBy": "string (optional) - Username"
+  },
+  "metadata": {
+    "triggeredBy": "string (optional)",
+    "standardsChecked": ["array of strings (optional)"]
+  }
+}
 ```
+
+**Key Requirements**:
+
+- Arrays can be empty: `[]`
+- Status must be exactly "PASS" or "FAIL"  
+- Counts must match array lengths
+- Include line numbers in file paths when applicable
 
 ## Handling Override Comments
 
@@ -120,22 +138,9 @@ Understand what the user is asking for:
 {Any additional context from the PR or comment}
 ```
 
-### 3. Include Fragment Link in Report
+### 3. Include Override Information in JSON
 
-After creating the fragment, **include it in your validation report**:
-
-```markdown
-## Override Applied
-
-A deviation from standards has been approved and documented:
-
-- **Deviation**: {Brief description}
-- **Justification**: {User's reason}
-- **Documentation**: Fragment created - {Fragment title} (ID: {fragment-id})
-- **Approved by**: @{username}
-
-This deviation has been recorded in the knowledge base for future reference.
-```
+After creating the fragment, include the `overrideApplied` object in your JSON file with the fragment details. The markdown report will automatically generate an "Override Applied" section.
 
 ### 4. Adjust Validation Accordingly
 

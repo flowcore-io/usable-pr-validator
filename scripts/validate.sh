@@ -265,7 +265,8 @@ run_forgecode() {
     set +e  # Temporarily disable exit on error to capture exit code
 
     # Use -p flag for non-interactive mode with prompt from file
-    forge --verbose -p "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
+    # Note: Removed --verbose to get clean output without debugging info
+    forge -p "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
     local exit_code=$?
 
     set -e  # Re-enable exit on error
@@ -317,42 +318,51 @@ run_forgecode() {
 extract_report() {
   local full_output="$1"
   local report_file="/tmp/validation-report.md"
+  local clean_output="/tmp/validation-clean-output.md"
+  
+  # First, strip ANSI escape codes from the output
+  # This handles color codes and formatting that might interfere with pattern matching
+  if command -v sed &> /dev/null; then
+    sed 's/\x1b\[[0-9;]*m//g' "$full_output" > "$clean_output"
+  else
+    cp "$full_output" "$clean_output"
+  fi
   
   # Strategy 1: Look for "# PR Validation Report" header
-  if grep -q "# PR Validation Report" "$full_output"; then
+  if grep -q "# PR Validation Report" "$clean_output"; then
     echo "Extracting report using Strategy 1: PR Validation Report header"
-    sed -n '/# PR Validation Report/,$p' "$full_output" > "$report_file"
+    sed -n '/# PR Validation Report/,$p' "$clean_output" > "$report_file"
     return 0
   fi
   
   # Strategy 2: Look for "## Summary" section
-  if grep -q "## Summary" "$full_output"; then
+  if grep -q "## Summary" "$clean_output"; then
     echo "Extracting report using Strategy 2: Summary section"
-    sed -n '/## Summary/,$p' "$full_output" > "$report_file"
+    sed -n '/## Summary/,$p' "$clean_output" > "$report_file"
     echo "# PR Validation Report" | cat - "$report_file" > /tmp/temp && mv /tmp/temp "$report_file"
     return 0
   fi
   
   # Strategy 3: Look for "## Critical Violations" section
-  if grep -q "## Critical Violations" "$full_output"; then
+  if grep -q "## Critical Violations" "$clean_output"; then
     echo "Extracting report using Strategy 3: Critical Violations section"
-    sed -n '/## Critical Violations/,$p' "$full_output" > "$report_file"
+    sed -n '/## Critical Violations/,$p' "$clean_output" > "$report_file"
     echo "# PR Validation Report" | cat - "$report_file" > /tmp/temp && mv /tmp/temp "$report_file"
     return 0
   fi
   
   # Strategy 4: Use full output with warning
   echo "::warning::Could not find report markers. Using full output."
-  echo "::group::Gemini Full Output (first 50 lines)"
-  head -50 "$full_output" || echo "Could not read output file"
+  echo "::group::ForgeCode Full Output (first 50 lines)"
+  head -50 "$clean_output" || echo "Could not read output file"
   echo "::endgroup::"
   
-  if [ ! -f "$full_output" ]; then
-    echo "::error::Full output file does not exist: $full_output"
+  if [ ! -f "$clean_output" ]; then
+    echo "::error::Clean output file does not exist: $clean_output"
     return 1
   fi
   
-  cp "$full_output" "$report_file"
+  cp "$clean_output" "$report_file"
   
   if [ ! -f "$report_file" ]; then
     echo "::error::Failed to create report file: $report_file"
@@ -363,16 +373,19 @@ extract_report() {
   return 0
 }
 
-# Parse validation results and set GitHub outputs
+# Parse validation results from JSON and set GitHub outputs
 parse_results() {
-  local report_file="$1"
+  local json_file="/tmp/validation-report.json"
   
-  # Check for PASS/FAIL status
+  # Extract values from JSON
   local validation_status
   local validation_passed
   local critical_issues
   
-  if grep -q -i "Status.*PASS" "$report_file" || grep -q "✅" "$report_file"; then
+  # Get status from JSON
+  local status=$(jq -r '.validationOutcome.status' "$json_file")
+  
+  if [ "$status" = "PASS" ]; then
     validation_status="passed"
     validation_passed="true"
   else
@@ -380,10 +393,8 @@ parse_results() {
     validation_passed="false"
   fi
   
-  # Count critical issues (looking for unchecked critical violations)
-  # Strip any whitespace/newlines and ensure we get a clean integer
-  critical_issues=$(grep -c "^- \[ \] \*\*" "$report_file" 2>/dev/null || echo "0")
-  critical_issues=$(echo "$critical_issues" | tr -d '\n\r' | tr -d ' ')
+  # Get critical issues count from JSON
+  critical_issues=$(jq -r '.validationOutcome.criticalIssuesCount' "$json_file")
   
   # Ensure we have a valid integer (default to 0 if empty or invalid)
   if ! [[ "$critical_issues" =~ ^[0-9]+$ ]]; then
@@ -466,30 +477,54 @@ main() {
     exit 1
   fi
   
-  # Extract report from output
-  echo "::group::Extracting validation report"
-  echo "Full output file: /tmp/validation-full-output.md"
-  if [ -f "/tmp/validation-full-output.md" ]; then
-    echo "✅ Full output file exists ($(wc -l < /tmp/validation-full-output.md) lines)"
-  else
-    echo "::error::Full output file does not exist!"
-    exit 1
-  fi
+  # Check if JSON report was created
+  echo "::group::Processing validation report"
   
-  if ! extract_report "/tmp/validation-full-output.md"; then
-    echo "::error::Failed to extract validation report"
+  if [ ! -f "/tmp/validation-report.json" ]; then
+    echo "::error::JSON report file not created by ForgeCode"
+    echo "Expected file: /tmp/validation-report.json"
+    echo ""
+    echo "::group::ForgeCode output (for debugging)"
+    if [ -f "/tmp/validation-full-output.md" ]; then
+      head -100 "/tmp/validation-full-output.md" || echo "Could not read output file"
+    fi
+    echo "::endgroup::"
     echo "::endgroup::"
     exit 1
   fi
+  
+  echo "✅ JSON report found"
+  
+  # Validate JSON
+  if ! jq empty "/tmp/validation-report.json" 2>/dev/null; then
+    echo "::error::Invalid JSON in report file"
+    echo "::group::JSON content"
+    cat "/tmp/validation-report.json" || echo "Could not read JSON file"
+    echo "::endgroup::"
+    echo "::endgroup::"
+    exit 1
+  fi
+  
+  echo "✅ JSON is valid"
+  
+  # Construct markdown report from JSON
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if ! "$SCRIPT_DIR/construct-markdown.sh" "/tmp/validation-report.json" "/tmp/validation-report.md"; then
+    echo "::error::Failed to construct markdown from JSON"
+    echo "::endgroup::"
+    exit 1
+  fi
+  
+  echo "✅ Markdown report constructed"
   echo "::endgroup::"
   
   # Parse results and set outputs
   echo "Parsing validation results..."
   
   # Set GitHub outputs and get results
-  if [ -f "/tmp/validation-report.md" ]; then
+  if [ -f "/tmp/validation-report.json" ]; then
     # parse_results writes to GITHUB_OUTPUT and returns display values
-    results=$(parse_results "/tmp/validation-report.md")
+    results=$(parse_results)
     
     # Extract values for display (pipe-separated format)
     IFS='|' read -r validation_status validation_passed critical_issues <<< "$results"
