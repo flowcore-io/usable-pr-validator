@@ -238,6 +238,18 @@ jobs:
           ## Your Task
           Validate this PR for the usable-pr-validator GitHub Action repository.
           
+          ### Step 0: Verify MCP Connection
+          **Test the Usable MCP connection by listing workspaces:**
+          
+          Use the `list-workspaces` tool to verify:
+          - MCP server connection is working
+          - Authentication is successful
+          - You have access to the expected workspace(s)
+          
+          Expected workspace: "Flowcore" (ID: 60c10ca2-4115-4c1a-b6d7-04ac39fd3938)
+          
+          If the MCP connection fails, report this as a CRITICAL VIOLATION.
+          
           ### Step 1: Get PR Changes
           ```bash
           # Compare base ref (branch or tag) with HEAD
@@ -278,6 +290,11 @@ jobs:
           ## Output Format
           
           # PR Validation Report
+          
+          ## MCP Connection Test
+          - **Status**: Connected ✅ or Failed ❌
+          - **Workspaces Found**: [count]
+          - **Target Workspace**: Found/Not Found
           
           ## Summary
           [Brief overview of the changes and validation results]
@@ -372,6 +389,9 @@ jobs:
           ## Your Task
           Validate documentation changes in this PR.
           
+          ### Step 0: Verify MCP Connection
+          Use the `list-workspaces` tool to verify the Usable MCP connection is working.
+          
           ### Get Changes
           ```bash
           # Compare base ref (branch or tag) with HEAD for markdown files
@@ -398,6 +418,9 @@ jobs:
           ## Output Format
           
           # PR Validation Report
+          
+          ## MCP Connection Test
+          - **Status**: Connected ✅ or Failed ❌
           
           ## Summary
           [Overview of documentation changes]
@@ -489,6 +512,9 @@ jobs:
           ## Your Task
           Test the comment revalidation feature.
           
+          ### Step 0: Verify MCP Connection
+          Use the `list-workspaces` tool to verify the Usable MCP connection is working.
+          
           ### Step 1: Verify Override Comment
           
           Check if there is an override/clarification comment in the PR context above (marked with 🔄).
@@ -514,6 +540,9 @@ jobs:
           ## Output Format
           
           # PR Validation Report
+          
+          ## MCP Connection Test
+          - **Status**: Connected ✅ or Failed ❌
           
           ## Summary
           [Mention this is a comment revalidation test]
