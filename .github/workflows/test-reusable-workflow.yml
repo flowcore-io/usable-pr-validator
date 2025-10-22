@@ -23,11 +23,12 @@ jobs:
     with:
       workspace-id: '60c10ca2-4115-4c1a-b6d7-04ac39fd3938'
       prompt-file: 'templates/basic-validation.md'
-      gemini-model: 'gemini-2.5-flash'
+      provider: 'auto'
+      model: 'openai/gpt-oss-120b'
       comment-title: '🧪 Reusable Workflow Test'
       fail-on-critical: false
     secrets:
-      GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
     permissions:
       contents: read
@@ -62,22 +63,26 @@ jobs:
           **Test Configuration**:
           - Workspace ID: 60c10ca2-4115-4c1a-b6d7-04ac39fd3938
           - Prompt File: templates/basic-validation.md
-          - Model: gemini-2.5-flash
+          - Provider: auto
+          - Model: openai/gpt-oss-120b
           - Comment Title: 🧪 Reusable Workflow Test
-          
+
           **Result**: ${{ needs.test-reusable.result }}
-          
+
           **Next Steps**:
           - If successful: Reusable workflow is ready for users
           - If failed: Check workflow logs for errors
-          
+
           **How Users Will Call It**:
           \`\`\`yaml
           uses: flowcore/usable-pr-validator/.github/workflows/comment-revalidation.yml@v1
           with:
             workspace-id: 'their-workspace-uuid'
+            # Optional - defaults to auto and openai/gpt-oss-120b
+            # provider: 'openrouter'  # or 'anthropic', 'openai', 'auto'
+            # model: 'anthropic/claude-3.7-sonnet'  # for higher quality
           secrets:
-            GEMINI_SERVICE_ACCOUNT_KEY: \${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+            OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
             USABLE_API_TOKEN: \${{ secrets.USABLE_API_TOKEN }}
           \`\`\`
           EOF

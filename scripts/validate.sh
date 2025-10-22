@@ -100,11 +100,53 @@ verify_git_refs() {
   fi
 }
 
+# Get file stats for the PR
+get_file_stats() {
+  local base="${BASE_BRANCH}"
+  local head="${HEAD_BRANCH}"
+
+  echo "Getting file statistics for PR..."
+
+  # Try to get the diff stat
+  local file_stats=""
+  if git diff --stat "origin/$base...origin/$head" 2>/dev/null; then
+    file_stats=$(git diff --stat "origin/$base...origin/$head" 2>/dev/null || echo "Unable to retrieve file statistics")
+  elif git diff --stat "$base...$head" 2>/dev/null; then
+    file_stats=$(git diff --stat "$base...$head" 2>/dev/null || echo "Unable to retrieve file statistics")
+  else
+    file_stats="Unable to retrieve file statistics. Use git commands to explore changes."
+  fi
+
+  # Also get list of changed files
+  local changed_files=""
+  if git diff --name-only "origin/$base...origin/$head" 2>/dev/null; then
+    changed_files=$(git diff --name-only "origin/$base...origin/$head" 2>/dev/null | head -100)
+  elif git diff --name-only "$base...$head" 2>/dev/null; then
+    changed_files=$(git diff --name-only "$base...$head" 2>/dev/null | head -100)
+  fi
+
+  # Format the output
+  local output="## Files Changed
+
+\`\`\`
+$file_stats
+\`\`\`
+
+## Changed Files List
+\`\`\`
+$changed_files
+\`\`\`
+
+**Note**: Use \`git --no-pager diff origin/$base...origin/$head -- <file_path>\` to examine specific files."
+
+  echo "$output"
+}
+
 # Prepare prompt with placeholder replacement
-# 
+#
 # Uses bash native string replacement for simplicity and safety.
 # For current scope (8 placeholders), this is efficient and readable.
-# 
+#
 # Alternative approaches considered:
 # - envsubst: Would require careful escaping of $ symbols in prompts
 # - sed: More complex escaping, harder to maintain
@@ -117,7 +159,7 @@ verify_git_refs() {
 prepare_prompt() {
   local prompt_file="$1"
   local output_file="/tmp/validation-prompt.txt"
-  
+
   # Create PR context block
   PR_CONTEXT="**PR #${PR_NUMBER}**: ${PR_TITLE}
 
@@ -129,7 +171,7 @@ prepare_prompt() {
 ${PR_DESCRIPTION:-No description provided}"
 
   # Add override comment if provided
-  if [ -n "$OVERRIDE_COMMENT" ]; then
+  if [ -n "${OVERRIDE_COMMENT:-}" ]; then
     PR_CONTEXT="${PR_CONTEXT}
 
 **🔄 Override/Clarification Comment** (from @${COMMENT_AUTHOR:-unknown}):
@@ -147,13 +189,18 @@ ${OVERRIDE_COMMENT}
     web_fetch_policy="**Web fetch is DISABLED** for this validation. DO NOT use the \`web_fetch\` tool or attempt to download content from URLs. All validation must be performed using only the git repository contents, PR context, and Usable MCP knowledge base."
   fi
 
+  # Get file statistics
+  local file_stats
+  file_stats=$(get_file_stats)
+
   # Read prompt template
   PROMPT_CONTENT=$(cat "$prompt_file")
-  
+
   # Replace placeholders using bash string replacement (NOT sed)
   # This handles special characters safely
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{WEB_FETCH_POLICY\}\}/${web_fetch_policy}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_CONTEXT\}\}/${PR_CONTEXT}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{FILE_STATS\}\}/${file_stats}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{BASE_BRANCH\}\}/${BASE_BRANCH}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{HEAD_BRANCH\}\}/${HEAD_BRANCH}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_TITLE\}\}/${PR_TITLE}}"
@@ -162,10 +209,10 @@ ${OVERRIDE_COMMENT}
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_URL\}\}/${PR_URL}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_AUTHOR\}\}/${PR_AUTHOR}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_LABELS\}\}/${PR_LABELS:-none}}"
-  
+
   # Write to temp file
   echo "$PROMPT_CONTENT" > "$output_file"
-  
+
   # Verify prompt is not empty
   if [ ! -s "$output_file" ]; then
     echo "::error::Prompt file is empty after placeholder replacement"
@@ -176,70 +223,77 @@ ${OVERRIDE_COMMENT}
     echo "  3. Placeholder replacement failed"
     return 1
   fi
-  
+
   echo "$output_file"
 }
 
-# Run Gemini validation with retry logic
-run_gemini() {
+# Run ForgeCode validation with retry logic
+run_forgecode() {
   local prompt_file="$1"
   local retry_count=0
   local max_retries="${MAX_RETRIES:-2}"
-  
+
   while [ $retry_count -le $max_retries ]; do
-    echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running Gemini validation..."
-    
+    echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running ForgeCode validation..."
+
     # Debug: Check prompt file
     if [ ! -f "$prompt_file" ]; then
       echo "::error::Prompt file does not exist: $prompt_file"
       return 1
     fi
-    
+
     echo "Prompt file: $prompt_file"
     echo "Prompt file size: $(wc -c < "$prompt_file") bytes"
     echo "Prompt file lines: $(wc -l < "$prompt_file") lines"
-    
+
     # Show detailed execution info
-    echo "🤖 Running Gemini CLI"
+    echo "🤖 Running ForgeCode CLI"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Model: $GEMINI_MODEL"
+    echo "Provider: ${PROVIDER:-auto}"
+    echo "Model: ${MODEL}"
     echo "Prompt size: $(wc -c < "$prompt_file") bytes"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    
-    # Run Gemini CLI and capture output
+
+    # Configure ForgeCode with the specified model
+    if [ -n "${MODEL:-}" ]; then
+      echo "Configuring ForgeCode model: ${MODEL}"
+      forge config set --model "${MODEL}" 2>&1 || echo "Warning: Could not set model config"
+    fi
+
+    # Run ForgeCode CLI and capture output
     set +e  # Temporarily disable exit on error to capture exit code
-    
-    # Just use tee to show and save output - simple and effective
-    gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
+
+    # Use -p flag for non-interactive mode with prompt from file
+    forge --verbose -p "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
     local exit_code=$?
-    
+
     set -e  # Re-enable exit on error
-    
+
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
+
     if [ $exit_code -eq 0 ]; then
-      echo "✅ Gemini CLI completed successfully (exit code: 0)"
+      echo "✅ ForgeCode CLI completed successfully (exit code: 0)"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       return 0
     else
-      echo "❌ Gemini CLI failed (exit code: $exit_code)"
+      echo "❌ ForgeCode CLI failed (exit code: $exit_code)"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo ""
-      
+
       # Error details are shown above in the output
       echo "⚠️ Check the output above for error details"
-      
+
       # Check if it's a retryable error
       local is_retryable=false
       if [ -f /tmp/validation-full-output.md ] && grep -q -E "(429|503|timeout|rate limit)" /tmp/validation-full-output.md; then
         is_retryable=true
       fi
-      
+
       if [ "$is_retryable" = true ]; then
         retry_count=$((retry_count + 1))
-        
+
         if [ $retry_count -le $max_retries ]; then
           wait_time=$((2 ** retry_count))
           echo "⏳ Rate limit or timeout detected. Retrying after ${wait_time} seconds..."
@@ -255,11 +309,11 @@ run_gemini() {
       fi
     fi
   done
-  
+
   return 1
 }
 
-# Extract validation report from Gemini output
+# Extract validation report from ForgeCode output
 extract_report() {
   local full_output="$1"
   local report_file="/tmp/validation-report.md"
@@ -390,9 +444,9 @@ main() {
   prompt_with_replacements=$(prepare_prompt "$actual_prompt_file")
   
   echo "Prompt prepared: $prompt_with_replacements"
-  
-  # Run Gemini validation
-  if ! run_gemini "$prompt_with_replacements"; then
+
+  # Run ForgeCode validation
+  if ! run_forgecode "$prompt_with_replacements"; then
     echo "::error::Validation execution failed"
     
     # Set failed outputs using heredoc delimiter

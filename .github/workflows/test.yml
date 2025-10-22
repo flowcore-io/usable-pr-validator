@@ -182,16 +182,16 @@ jobs:
       - name: Verify Cleanup Steps
         run: |
           # Check that action.yml has cleanup steps
-          if ! grep -q "rm -f /tmp/service-account.json" action.yml; then
-            echo "::error::Missing cleanup for service-account.json"
+          if ! grep -q "rm -f /tmp/forge-config.yaml" action.yml; then
+            echo "::error::Missing cleanup for forge-config.yaml"
             exit 1
           fi
-          
-          if ! grep -q "rm -f /tmp/gemini-settings.json" action.yml; then
-            echo "::error::Missing cleanup for gemini-settings.json"
+
+          if ! grep -q "rm -f /tmp/validation-.*\.md" action.yml; then
+            echo "::error::Missing cleanup for validation files"
             exit 1
           fi
-          
+
           echo "✅ Cleanup steps verified"
 
   integration-test:
@@ -313,7 +313,7 @@ jobs:
           comment-mode: 'update'
           fail-on-critical: false
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
       
       - name: Debug Test Results
@@ -321,7 +321,7 @@ jobs:
         run: |
           echo "Test result: ${{ steps.test-action.outcome }}"
           if [ -f "/tmp/validation-full-output.md" ]; then
-            echo "::group::Full Gemini Output"
+            echo "::group::Full ForgeCode Output"
             cat /tmp/validation-full-output.md
             echo "::endgroup::"
           else
@@ -430,7 +430,7 @@ jobs:
           comment-mode: 'update'
           fail-on-critical: false
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
       
       - name: Debug Documentation Results
@@ -438,7 +438,7 @@ jobs:
         run: |
           echo "Docs test result: ${{ steps.docs-action.outcome }}"
           if [ -f "/tmp/validation-full-output.md" ]; then
-            echo "::group::Full Gemini Output"
+            echo "::group::Full ForgeCode Output"
             cat /tmp/validation-full-output.md
             echo "::endgroup::"
           else
@@ -569,7 +569,7 @@ jobs:
           comment-mode: 'update'
           fail-on-critical: false
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
           COMMENT_AUTHOR: 'test-user'
       

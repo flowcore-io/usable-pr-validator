@@ -1,5 +1,5 @@
 name: 'Usable PR Validator'
-description: 'Validate Pull Requests against your Usable knowledge base standards using Google Gemini AI and Usable MCP integration'
+description: 'Validate Pull Requests against your Usable knowledge base standards using ForgeCode with OpenRouter, OpenAI, Anthropic, or other LLM providers'
 author: 'Flowcore'
 
 branding:
@@ -27,14 +27,18 @@ inputs:
     description: 'User comment requesting validation override or clarification (typically from @usable mention)'
     required: false
     default: ''
-  gemini-model:
-    description: 'Gemini model to use (gemini-2.5-flash, gemini-2.0-flash, gemini-2.5-pro)'
+  provider:
+    description: 'LLM provider: openrouter, openai, anthropic, or auto (auto-detect from env vars)'
     required: false
-    default: 'gemini-2.5-flash'
-  service-account-key-secret:
-    description: 'Name of secret containing base64-encoded Gemini service account key'
+    default: 'auto'
+  model:
+    description: 'Model to use (e.g., openai/gpt-oss-120b, anthropic/claude-3.7-sonnet, openai/gpt-4, meta-llama/llama-3.3-70b-instruct)'
     required: false
-    default: 'GEMINI_SERVICE_ACCOUNT_KEY'
+    default: 'openai/gpt-oss-120b'
+  api-key-secret:
+    description: 'Name of secret containing API key (OPENROUTER_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY)'
+    required: false
+    default: 'OPENROUTER_API_KEY'
   mcp-server-url:
     description: 'HTTP URL of MCP server'
     required: false
@@ -164,12 +168,12 @@ runs:
       with:
         node-version: '20'
     
-    - name: Install Gemini CLI
+    - name: Install ForgeCode CLI
       shell: bash
       run: |
-        echo "::group::Installing Gemini CLI"
-        npm install -g @google/gemini-cli@0.7.0
-        echo "✅ Gemini CLI installed"
+        echo "::group::Installing ForgeCode CLI"
+        npm install -g forgecode@latest
+        echo "✅ ForgeCode CLI installed"
         echo "::endgroup::"
     
     - name: Setup Git
@@ -276,12 +280,13 @@ runs:
         echo "✅ Git configured"
         echo "::endgroup::"
     
-    - name: Setup Gemini Authentication
+    - name: Setup LLM Provider Authentication
       shell: bash
       env:
-        SECRET_NAME: ${{ inputs.service-account-key-secret }}
+        PROVIDER: ${{ inputs.provider }}
+        API_KEY_SECRET: ${{ inputs.api-key-secret }}
       run: |
-        ${{ github.action_path }}/scripts/setup-gemini.sh
+        ${{ github.action_path }}/scripts/setup-provider.sh
     
     - name: Setup MCP Server
       shell: bash
@@ -311,7 +316,8 @@ runs:
       env:
         PROMPT_FILE: ${{ inputs.prompt-file }}
         USE_DYNAMIC_PROMPTS: ${{ inputs.use-dynamic-prompts }}
-        GEMINI_MODEL: ${{ inputs.gemini-model }}
+        PROVIDER: ${{ inputs.provider }}
+        MODEL: ${{ inputs.model }}
         MAX_RETRIES: ${{ inputs.max-retries }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         PR_TITLE: ${{ github.event.pull_request.title }}
@@ -349,9 +355,10 @@ runs:
           const markerId = commentTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
           const marker = `<!-- usable-pr-validator:${markerId} -->`;
           
-          const commentBody = marker + '\n## 🤖 ' + commentTitle + '\n\n' + 
+          const commentBody = marker + '\n## 🤖 ' + commentTitle + '\n\n' +
             report + '\n\n---\n<details>\n<summary>📊 Validation Statistics</summary>\n\n' +
-            '- **Model**: Google Gemini ${{ inputs.gemini-model }}\n' +
+            '- **Provider**: ${{ inputs.provider }}\n' +
+            '- **Model**: ${{ inputs.model }}\n' +
             '- **Standards Source**: ${{ inputs.mcp-server-url }}\n' +
             '- **Commit**: ' + context.payload.pull_request.head.sha.substring(0, 7) + '\n' +
             '- **Triggered by**: @' + context.actor + '\n\n' +
@@ -408,9 +415,8 @@ runs:
       shell: bash
       run: |
         # Remove temporary files containing sensitive data
-        rm -f /tmp/service-account.json
-        rm -f /tmp/gemini-settings.json
-        rm -f /tmp/gemini-stderr.log
+        rm -f /tmp/forge-config.yaml
+        rm -f /tmp/validation-*.md
         echo "✅ Temporary files cleaned up"
     
     - name: Fail on Critical Violations

@@ -25,11 +25,16 @@ on:
         required: false
         type: string
         default: ''
-      gemini-model:
-        description: 'Gemini model to use'
+      provider:
+        description: 'LLM provider (openrouter, anthropic, openai, auto)'
         required: false
         type: string
-        default: 'gemini-2.5-flash'
+        default: 'auto'
+      model:
+        description: 'Model to use'
+        required: false
+        type: string
+        default: 'openai/gpt-oss-120b'
       comment-title:
         description: 'Title for the validation comment'
         required: false
@@ -41,9 +46,15 @@ on:
         type: boolean
         default: false
     secrets:
-      GEMINI_SERVICE_ACCOUNT_KEY:
-        description: 'Base64-encoded Gemini service account key'
-        required: true
+      OPENROUTER_API_KEY:
+        description: 'OpenRouter API key (or ANTHROPIC_API_KEY/OPENAI_API_KEY)'
+        required: false
+      ANTHROPIC_API_KEY:
+        description: 'Anthropic API key'
+        required: false
+      OPENAI_API_KEY:
+        description: 'OpenAI API key'
+        required: false
       USABLE_API_TOKEN:
         description: 'Usable API token'
         required: true
@@ -273,13 +284,16 @@ jobs:
           prompt-fragment-id: ${{ inputs.prompt-fragment-id || '' }}
           workspace-id: ${{ inputs.workspace-id || '60c10ca2-4115-4c1a-b6d7-04ac39fd3938' }}
           base-ref: ${{ steps.base-ref.outputs.base-ref }}
-          gemini-model: ${{ inputs.gemini-model || 'gemini-2.5-flash' }}
+          provider: ${{ inputs.provider || 'auto' }}
+          model: ${{ inputs.model || 'openai/gpt-oss-120b' }}
           comment-title: ${{ inputs.comment-title || '🔄 Revalidation (Comment Triggered)' }}
           comment-mode: 'create'
           fail-on-critical: ${{ inputs.fail-on-critical || false }}
           override-comment: ${{ needs.check-trigger.outputs.comment-body }}
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
           COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
       
