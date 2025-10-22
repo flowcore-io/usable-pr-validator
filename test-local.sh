@@ -37,7 +37,7 @@ fi
 export PROVIDER="${PROVIDER:-auto}"
 export MODEL="${MODEL:-anthropic/claude-haiku-4.5}"
 export WORKSPACE_ID="${WORKSPACE_ID:-60c10ca2-4115-4c1a-b6d7-04ac39fd3938}"  # Flowcore workspace
-export MCP_SERVER_URL="${MCP_SERVER_URL:-https://usable.dev/api/mcp}"
+export USABLE_URL="${USABLE_URL:-https://usable.dev}"
 
 # Git configuration (you can override these)
 export BASE_BRANCH="${BASE_BRANCH:-main}"
@@ -53,6 +53,9 @@ export PR_LABELS="${PR_LABELS:-test,local}"
 
 # Other settings
 export USE_DYNAMIC_PROMPTS="${USE_DYNAMIC_PROMPTS:-false}"
+# Don't set CUSTOM_PROMPT_FILE by default - let fetch-prompt.sh use only hardcoded + MCP prompts
+# Users can set this if they want to test with a custom prompt file
+export CUSTOM_PROMPT_FILE="${CUSTOM_PROMPT_FILE:-}"
 export PROMPT_FILE="${PROMPT_FILE:-./system-prompt.md}"
 export MAX_RETRIES="${MAX_RETRIES:-2}"
 export ALLOW_WEB_FETCH="${ALLOW_WEB_FETCH:-false}"
@@ -112,17 +115,17 @@ echo ""
 # Run MCP setup
 echo "🔗 Setting up MCP"
 echo "================"
-# For local testing, MCP_URL is already set and USABLE_API_TOKEN is in the environment
-MCP_URL="${MCP_SERVER_URL}" ./scripts/setup-mcp.sh
+# For local testing, USABLE_URL and USABLE_API_TOKEN are in the environment
+./scripts/setup-mcp.sh
 echo ""
 
-# Check if we should fetch dynamic prompts
-if [ "$USE_DYNAMIC_PROMPTS" = "true" ]; then
-  echo "📥 Fetching Dynamic Prompts"
-  echo "=========================="
-  ./scripts/fetch-prompt.sh
-  echo ""
-fi
+# Check if we should fetch dynamic prompts or just prepare prompts
+echo "📥 Fetching/Preparing Prompts"
+echo "============================="
+# Set ACTION_PATH for local testing (points to repo root where system-prompt.md is)
+export ACTION_PATH="$(pwd)"
+./scripts/fetch-prompt.sh
+echo ""
 
 # Run validation
 echo "🚀 Running Validation"

@@ -39,14 +39,6 @@ inputs:
     description: 'Name of secret containing API key (OPENROUTER_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY)'
     required: false
     default: 'OPENROUTER_API_KEY'
-  mcp-server-url:
-    description: 'HTTP URL of MCP server'
-    required: false
-    default: 'https://usable.dev/api/mcp'
-  mcp-token-secret:
-    description: 'Name of secret containing Usable API token'
-    required: false
-    default: 'USABLE_API_TOKEN'
   workspace-id:
     description: 'Usable workspace UUID (required - used to fetch MCP system prompt)'
     required: true
@@ -291,8 +283,8 @@ runs:
     - name: Setup MCP Server
       shell: bash
       env:
-        MCP_URL: ${{ inputs.mcp-server-url }}
-        MCP_SECRET_NAME: ${{ inputs.mcp-token-secret }}
+        USABLE_URL: ${{ env.USABLE_URL || 'https://usable.dev' }}
+        USABLE_API_TOKEN: ${{ env.USABLE_API_TOKEN }}
         WORKSPACE_ID: ${{ inputs.workspace-id }}
       run: |
         ${{ github.action_path }}/scripts/setup-mcp.sh
@@ -305,7 +297,8 @@ runs:
         WORKSPACE_ID: ${{ inputs.workspace-id }}
         CUSTOM_PROMPT_FILE: ${{ inputs.prompt-file }}
         MERGE_CUSTOM_PROMPT: ${{ inputs.merge-custom-prompt }}
-        MCP_SECRET_NAME: ${{ inputs.mcp-token-secret }}
+        USABLE_URL: ${{ env.USABLE_URL || 'https://usable.dev' }}
+        USABLE_API_TOKEN: ${{ env.USABLE_API_TOKEN }}
         ACTION_PATH: ${{ github.action_path }}
       run: |
         ${{ github.action_path }}/scripts/fetch-prompt.sh

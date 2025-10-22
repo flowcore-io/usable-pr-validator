@@ -118,8 +118,9 @@ export OPENAI_API_KEY='your-openai-key'             # For OpenAI
 export USABLE_API_TOKEN='your-usable-token'
 
 # Optional (can be set in the script or use defaults)
+export USABLE_URL='https://usable.dev'              # Usable instance URL (default)
 export PROVIDER='auto'                               # or 'openrouter', 'anthropic', 'openai'
-export MODEL='anthropic/claude-haiku-4.5'                       # default model (fast and cost-effective)
+export MODEL='anthropic/claude-haiku-4.5'           # default model (fast and cost-effective)
 export WORKSPACE_ID='your-workspace-uuid'           # Usable workspace
 export BASE_BRANCH='main'                           # base branch for diff
 export HEAD_BRANCH='feature-branch'                 # current branch
@@ -163,8 +164,6 @@ The script will:
 | `provider` | LLM provider: `openrouter`, `openai`, `anthropic`, or `auto` (auto-detect from env vars) | | `auto` |
 | `model` | Model to use (e.g., `anthropic/claude-haiku-4.5`, `anthropic/claude-3.7-sonnet`, `openai/gpt-4`, `meta-llama/llama-3.3-70b-instruct`) | | `anthropic/claude-haiku-4.5` |
 | `api-key-secret` | Name of secret containing API key | | `OPENROUTER_API_KEY` |
-| `mcp-server-url` | Usable MCP server URL | | `https://usable.dev/api/mcp` |
-| `mcp-token-secret` | Secret name for Usable API token | | `USABLE_API_TOKEN` |
 | `fail-on-critical` | Fail build on critical violations | | `true` |
 | `comment-mode` | PR comment behavior (`update`/`new`/`none`) | | `update` |
 | `comment-title` | Title for PR comment (for multi-stage validation) | | `Automated Standards Validation` |
@@ -175,7 +174,15 @@ The script will:
 | `head-ref` | Head reference for diff comparison | | PR head branch |
 | `allow-web-fetch` | Allow AI to use web_fetch tool for external resources (security consideration) | | `false` |
 
-> **Note**: You must set the `USABLE_API_TOKEN` secret (or the custom secret name specified in `mcp-token-secret`). Usable MCP integration is required for this action.
+#### Environment Variables (Required in Workflow)
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `OPENROUTER_API_KEY` | Your OpenRouter API key (or `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`) | ✓ |
+| `USABLE_API_TOKEN` | Your Usable API token for MCP integration | ✓ |
+| `USABLE_URL` | Usable instance URL (defaults to `https://usable.dev`) | |
+
+> **Note**: You must set the `USABLE_API_TOKEN` secret. Usable MCP integration is required for this action.
 
 ### 🧠 System Prompts (Automatic)
 

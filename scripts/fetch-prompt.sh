@@ -9,16 +9,21 @@ if ! command -v jq &> /dev/null; then
   exit 1
 fi
 
-# Get USABLE_API_TOKEN from secrets
-USABLE_API_TOKEN="${!MCP_SECRET_NAME:-}"
-if [ -z "$USABLE_API_TOKEN" ]; then
+# Get USABLE_API_TOKEN from environment
+# The token should be passed directly as USABLE_API_TOKEN env var
+if [ -z "${USABLE_API_TOKEN:-}" ]; then
   echo "::warning::USABLE_API_TOKEN not found. Skipping MCP system prompt fetching."
   HAS_API_TOKEN=false
 else
   HAS_API_TOKEN=true
+  echo "✅ USABLE_API_TOKEN found"
 fi
 
-USABLE_API_BASE="https://usable.dev/api"
+# Get Usable URL from environment (default to usable.dev)
+USABLE_URL="${USABLE_URL:-https://usable.dev}"
+USABLE_API_BASE="${USABLE_URL}/api"
+echo "Usable API Base: $USABLE_API_BASE"
+
 HARDCODED_SYSTEM_PROMPT="${ACTION_PATH}/system-prompt.md"
 MCP_SYSTEM_PROMPT_FILE="/tmp/mcp-system-prompt.md"
 USER_PROMPT_FILE="/tmp/user-prompt.md"
@@ -90,20 +95,15 @@ fetch_mcp_system_prompt() {
     return 1
   fi
   
-  # The API might return JSON with a content field, or plain text
-  # Try to parse as JSON first using jq
-  # Note: jq is pre-installed on GitHub Actions runners
+  # The API returns JSON with a systemPrompt field
+  # Extract it using jq
   local content
-  content=$(echo "$body" | jq -r '.content // .prompt // empty' 2>/dev/null)
-  
-  # If JSON parsing returned empty, use the body as-is (assuming plain text)
-  if [ -z "$content" ]; then
-    content="$body"
-  fi
+  content=$(echo "$body" | jq -r '.systemPrompt // empty' 2>/dev/null)
   
   # Verify content is not empty after parsing
   if [ -z "$content" ]; then
     echo "::warning::MCP system prompt content is empty after parsing."
+    echo "::debug::Response body: $body"
     return 1
   fi
   
@@ -169,15 +169,15 @@ main() {
     fi
   else
     # Static prompt file
-    if [ -n "$CUSTOM_PROMPT_FILE" ] && [ -f "$CUSTOM_PROMPT_FILE" ]; then
+    if [ -n "${CUSTOM_PROMPT_FILE:-}" ] && [ -f "$CUSTOM_PROMPT_FILE" ]; then
       echo "Using static prompt file: $CUSTOM_PROMPT_FILE"
       cp "$CUSTOM_PROMPT_FILE" "$USER_PROMPT_FILE"
       has_user_prompt=true
       echo "✅ Static prompt loaded"
       echo "Size: $(wc -c < "$USER_PROMPT_FILE") bytes"
     else
-      echo "::error::No user prompt file provided or file not found"
-      exit 1
+      echo "ℹ️ No custom user prompt file specified - using only hardcoded system + MCP system prompts"
+      has_user_prompt=false
     fi
   fi
   
