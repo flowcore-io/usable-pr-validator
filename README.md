@@ -202,6 +202,42 @@ The MCP-only test will:
 
 > **Note**: You must set the `USABLE_API_TOKEN` secret. Usable MCP integration is required for this action.
 
+### 🔗 MCP Integration (Automatic)
+
+The action automatically configures the **Usable MCP (Model Context Protocol) server** to give the AI model access to your team's knowledge base during validation.
+
+**How it works:**
+
+1. The action uses the `@usabledev/mcp-server` package (stdio transport)
+2. Runs as a subprocess via `npx @usabledev/mcp-server@latest server`
+3. Authenticates using the `USABLE_API_TOKEN` environment variable
+4. Provides the AI model with tools like:
+   - `mcp_usable_list-workspaces` - List accessible workspaces
+   - `mcp_usable_agentic-search-fragments` - Search knowledge base
+   - `mcp_usable_get-memory-fragment-content` - Read full fragments
+   - `mcp_usable_create-memory-fragment` - Document deviations
+   - And more...
+
+**Configuration:**
+
+- **No manual setup required** - the action configures everything automatically
+- **Node.js required** - The MCP server requires Node.js (available in GitHub Actions by default)
+- **Network access** - The MCP server connects to your Usable instance to fetch knowledge
+
+**Testing MCP Connection:**
+
+```bash
+# Test locally with the --mcp-only flag
+./test-local.sh --mcp-only
+```
+
+This will verify that:
+
+- ✅ MCP server starts successfully
+- ✅ AI model can access MCP tools
+- ✅ Workspace authentication works
+- ✅ Knowledge base is accessible
+
 ### 🧠 System Prompts (Automatic)
 
 The action **automatically** includes system prompts to ensure high-quality validations. The final prompt is assembled in this order:

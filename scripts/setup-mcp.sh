@@ -12,17 +12,15 @@ fi
 
 # Get Usable URL from environment (default to usable.dev)
 USABLE_URL="${USABLE_URL:-https://usable.dev}"
-MCP_ENDPOINT="${USABLE_URL}/api/mcp"
 
 echo "Usable URL: $USABLE_URL"
-echo "MCP Endpoint: $MCP_ENDPOINT"
 
 # Write .mcp.json file in the working directory with authentication
 # ForgeCode loads MCP servers from .mcp.json in the current directory
 echo "Writing .mcp.json configuration..."
 
 # Create the .mcp.json file with the Usable MCP server configuration
-# ForgeCode uses "url" and "headers" for HTTP-based MCP servers (no transport field needed)
+# Using stdio transport via @usabledev/mcp-server package
 cat > .mcp.json <<EOF
 {
   "mcpServers": {
@@ -31,7 +29,7 @@ cat > .mcp.json <<EOF
       "args": ["@usabledev/mcp-server@latest", "server"],
       "env": {
         "USABLE_API_TOKEN": "$USABLE_API_TOKEN",
-        "USABLE_BASE_URL": "https://usable.dev"
+        "USABLE_BASE_URL": "$USABLE_URL"
       }
     }
   }
@@ -39,9 +37,9 @@ cat > .mcp.json <<EOF
 EOF
 
 echo "✅ MCP server configured in .mcp.json"
-echo "  Endpoint: $MCP_ENDPOINT"
-echo "  Type: HTTP (remote)"
-echo "  Auth: Bearer token (configured)"
+echo "  Type: stdio (via @usabledev/mcp-server)"
+echo "  Command: npx @usabledev/mcp-server@latest server"
+echo "  Auth: Via USABLE_API_TOKEN environment variable"
 
 # Verify the configuration
 if [ -f ".mcp.json" ]; then
@@ -52,7 +50,7 @@ if [ -f ".mcp.json" ]; then
   if command -v jq &> /dev/null; then
     echo ""
     echo "  Configuration preview:"
-    jq '.mcpServers | to_entries[] | {name: .key, url: .value.url, hasAuth: (.value.headers.Authorization != null)}' .mcp.json 2>/dev/null | sed 's/^/    /' || echo "    (Preview unavailable)"
+    jq '.mcpServers | to_entries[] | {name: .key, command: .value.command, hasToken: (.value.env.USABLE_API_TOKEN != null)}' .mcp.json 2>/dev/null | sed 's/^/    /' || echo "    (Preview unavailable)"
   fi
 else
   echo "::error::Failed to create .mcp.json"
