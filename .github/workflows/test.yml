@@ -238,17 +238,20 @@ jobs:
           ## Your Task
           Validate this PR for the usable-pr-validator GitHub Action repository.
           
-          ### Step 0: Verify MCP Connection
-          **Test the Usable MCP connection by listing workspaces:**
+          ### Step 0: Verify MCP Connection (REQUIRED - CRITICAL)
+          **YOU MUST TEST THE USABLE MCP CONNECTION FIRST:**
           
-          Use the `list-workspaces` tool to verify:
-          - MCP server connection is working
-          - Authentication is successful
-          - You have access to the expected workspace(s)
+          1. Call the `mcp_usable_list-workspaces` tool with `{"includeArchived": false}`
+          2. In your report, include the EXACT output showing:
+             - Total number of workspaces found
+             - Name of each workspace
+             - Whether the expected workspace "Flowcore" (ID: 60c10ca2-4115-4c1a-b6d7-04ac39fd3938) was found
           
-          Expected workspace: "Flowcore" (ID: 60c10ca2-4115-4c1a-b6d7-04ac39fd3938)
+          **CRITICAL**: If you do not call this tool and show the results, your report will be considered INVALID.
           
-          If the MCP connection fails, report this as a CRITICAL VIOLATION.
+          Expected result: Should find at least the "Flowcore" workspace.
+          
+          If the MCP connection fails, report this as a CRITICAL VIOLATION with the exact error message.
           
           ### Step 1: Get PR Changes
           ```bash
@@ -291,10 +294,21 @@ jobs:
           
           # PR Validation Report
           
-          ## MCP Connection Test
+          ## MCP Connection Verification ✅ (REQUIRED)
+          
+          **MCP Server**: https://usable.dev/api/mcp
+          
+          ### Connection Test Results:
           - **Status**: Connected ✅ or Failed ❌
-          - **Workspaces Found**: [count]
-          - **Target Workspace**: Found/Not Found
+          - **Tool Called**: `mcp_usable_list-workspaces`
+          - **Total Workspaces Found**: [exact number]
+          - **Workspaces**:
+            - [Workspace 1 name] (ID: [uuid])
+            - [Workspace 2 name] (ID: [uuid])
+            - ...
+          - **Target Workspace Found**: ✅ Flowcore (60c10ca2-4115-4c1a-b6d7-04ac39fd3938) or ❌ Not Found
+          
+          **Verification Stamp**: 🔐 MCP connection verified on [timestamp]
           
           ## Summary
           [Brief overview of the changes and validation results]
@@ -389,8 +403,11 @@ jobs:
           ## Your Task
           Validate documentation changes in this PR.
           
-          ### Step 0: Verify MCP Connection
-          Use the `list-workspaces` tool to verify the Usable MCP connection is working.
+          ### Step 0: Verify MCP Connection (REQUIRED)
+          **YOU MUST call `mcp_usable_list-workspaces` tool first** and show the results in your report with:
+          - Total workspaces found
+          - List of workspace names and IDs
+          - Confirmation that "Flowcore" workspace was found
           
           ### Get Changes
           ```bash
@@ -419,8 +436,11 @@ jobs:
           
           # PR Validation Report
           
-          ## MCP Connection Test
+          ## MCP Connection Verification ✅
           - **Status**: Connected ✅ or Failed ❌
+          - **Workspaces Found**: [count]
+          - **Target Workspace**: ✅ Flowcore found or ❌ Not Found
+          - **Verification Stamp**: 🔐 MCP verified
           
           ## Summary
           [Overview of documentation changes]
@@ -512,8 +532,10 @@ jobs:
           ## Your Task
           Test the comment revalidation feature.
           
-          ### Step 0: Verify MCP Connection
-          Use the `list-workspaces` tool to verify the Usable MCP connection is working.
+          ### Step 0: Verify MCP Connection (REQUIRED)
+          **YOU MUST call `mcp_usable_list-workspaces` tool first** and show the results in your report with:
+          - Total workspaces found
+          - Verification that "Flowcore" workspace is accessible
           
           ### Step 1: Verify Override Comment
           
@@ -541,8 +563,10 @@ jobs:
           
           # PR Validation Report
           
-          ## MCP Connection Test
+          ## MCP Connection Verification ✅
           - **Status**: Connected ✅ or Failed ❌
+          - **Workspaces Found**: [count]
+          - **Verification Stamp**: 🔐 MCP verified
           
           ## Summary
           [Mention this is a comment revalidation test]
