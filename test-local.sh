@@ -4,8 +4,16 @@ set -euo pipefail
 # Local testing script for PR validation
 # This allows you to test the validator locally before pushing to GitHub
 
-echo "🧪 Usable PR Validator - Local Test"
-echo "===================================="
+# Parse command line arguments
+TEST_MODE="full"
+if [ "${1:-}" = "--mcp-only" ]; then
+  TEST_MODE="mcp"
+  echo "🔗 Usable PR Validator - MCP Connection Test Only"
+  echo "=================================================="
+else
+  echo "🧪 Usable PR Validator - Local Test"
+  echo "===================================="
+fi
 echo ""
 
 # Check required environment variables
@@ -118,6 +126,14 @@ echo "================"
 # For local testing, USABLE_URL and USABLE_API_TOKEN are in the environment
 ./scripts/setup-mcp.sh
 echo ""
+
+# If MCP-only test mode, run the MCP connection test and exit
+if [ "$TEST_MODE" = "mcp" ]; then
+  echo "🧪 Running MCP Connection Test"
+  echo "=============================="
+  ./scripts/test-mcp-connection.sh
+  exit $?
+fi
 
 # Check if we should fetch dynamic prompts or just prepare prompts
 echo "📥 Fetching/Preparing Prompts"

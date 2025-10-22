@@ -22,13 +22,16 @@ echo "MCP Endpoint: $MCP_ENDPOINT"
 echo "Writing .mcp.json configuration..."
 
 # Create the .mcp.json file with the Usable MCP server configuration
+# ForgeCode uses "url" and "headers" for HTTP-based MCP servers (no transport field needed)
 cat > .mcp.json <<EOF
 {
   "mcpServers": {
     "usable": {
-      "url": "$MCP_ENDPOINT",
-      "headers": {
-        "Authorization": "Bearer $USABLE_API_TOKEN"
+      "command": "npx",
+      "args": ["@usabledev/mcp-server@latest", "server"],
+      "env": {
+        "USABLE_API_TOKEN": "$USABLE_API_TOKEN",
+        "USABLE_BASE_URL": "https://usable.dev"
       }
     }
   }
@@ -37,12 +40,20 @@ EOF
 
 echo "✅ MCP server configured in .mcp.json"
 echo "  Endpoint: $MCP_ENDPOINT"
+echo "  Type: HTTP (remote)"
 echo "  Auth: Bearer token (configured)"
 
 # Verify the configuration
 if [ -f ".mcp.json" ]; then
   echo "  Configuration file created successfully"
   echo "  MCP server 'usable' will be available to ForgeCode"
+  
+  # Show config (without exposing token)
+  if command -v jq &> /dev/null; then
+    echo ""
+    echo "  Configuration preview:"
+    jq '.mcpServers | to_entries[] | {name: .key, url: .value.url, hasAuth: (.value.headers.Authorization != null)}' .mcp.json 2>/dev/null | sed 's/^/    /' || echo "    (Preview unavailable)"
+  fi
 else
   echo "::error::Failed to create .mcp.json"
   exit 1

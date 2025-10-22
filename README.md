@@ -132,11 +132,14 @@ export HEAD_BRANCH='feature-branch'                 # current branch
 # Make sure you're on the branch you want to test
 git checkout your-feature-branch
 
-# Run the test
+# Run the full validation test
 ./test-local.sh
+
+# OR test MCP connection only (faster, verifies Usable integration)
+./test-local.sh --mcp-only
 ```
 
-The script will:
+The full test will:
 1. Verify all required environment variables are set
 2. Install ForgeCode CLI if not already installed
 3. Fetch the necessary git refs
@@ -144,11 +147,26 @@ The script will:
 5. Run the validation
 6. Display the results and save artifacts to `/tmp/`
 
+The MCP-only test will:
+1. Verify environment variables (API keys)
+2. Install ForgeCode CLI if needed
+3. Configure the Usable MCP server
+4. Test that MCP tools are available to the AI model
+5. Verify workspace access and authentication
+6. Display connection results
+
+**Tip**: Run `--mcp-only` first to verify your Usable integration is working before running a full validation.
+
 ### Viewing Results
 
+**Full validation:**
 - **Full output**: `/tmp/validation-full-output.md`
 - **Validation report**: `/tmp/validation-report.md`
 - **GitHub outputs**: `/tmp/github-output.txt`
+
+**MCP test:**
+- **MCP test output**: `/tmp/mcp-test-output.txt`
+- **MCP test results**: `/tmp/mcp-test-result.json`
 
 ## 📖 Configuration
 

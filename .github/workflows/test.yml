@@ -194,10 +194,49 @@ jobs:
 
           echo "✅ Cleanup steps verified"
 
+  test-mcp-connection:
+    name: Test MCP Connection
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install ForgeCode
+        run: |
+          echo "Installing ForgeCode CLI..."
+          npm install -g forgecode@latest
+          forge --version
+      
+      - name: Setup MCP Server
+        env:
+          USABLE_URL: ${{ vars.USABLE_URL || 'https://usable.dev' }}
+          USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+          WORKSPACE_ID: '60c10ca2-4115-4c1a-b6d7-04ac39fd3938'
+        run: |
+          ./scripts/setup-mcp.sh
+      
+      - name: Test MCP Connection
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          ./scripts/test-mcp-connection.sh
+      
+      - name: Upload MCP Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-test-results
+          path: |
+            /tmp/mcp-test-*.txt
+            /tmp/mcp-test-*.json
+          retention-days: 7
+          if-no-files-found: warn
+
   integration-test:
     name: Integration Test
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    needs: test-mcp-connection
     permissions:
       contents: read
       pull-requests: write
@@ -363,6 +402,7 @@ jobs:
     name: Integration Test (Documentation)
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    needs: test-mcp-connection
     permissions:
       contents: read
       pull-requests: write
@@ -492,6 +532,7 @@ jobs:
     name: Integration Test (Comment Revalidation)
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    needs: test-mcp-connection
     permissions:
       contents: read
       pull-requests: write
