@@ -182,22 +182,109 @@ jobs:
       - name: Verify Cleanup Steps
         run: |
           # Check that action.yml has cleanup steps
-          if ! grep -q "rm -f /tmp/service-account.json" action.yml; then
-            echo "::error::Missing cleanup for service-account.json"
+          if ! grep -q "rm -f /tmp/forge-config.yaml" action.yml; then
+            echo "::error::Missing cleanup for forge-config.yaml"
             exit 1
           fi
-          
-          if ! grep -q "rm -f /tmp/gemini-settings.json" action.yml; then
-            echo "::error::Missing cleanup for gemini-settings.json"
+
+          if ! grep -q "rm -f /tmp/validation-.*\.md" action.yml; then
+            echo "::error::Missing cleanup for validation files"
             exit 1
           fi
-          
+
           echo "✅ Cleanup steps verified"
+
+  test-mcp-connection:
+    name: Test MCP Connection
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install ForgeCode
+        run: |
+          echo "Installing ForgeCode CLI..."
+          npm install -g forgecode@latest
+          forge --version
+          
+          echo ""
+          echo "Node.js version:"
+          node --version
+          echo "npm version:"
+          npm --version
+      
+      - name: Setup MCP Server
+        env:
+          USABLE_URL: ${{ vars.USABLE_URL || 'https://usable.dev' }}
+          USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+          WORKSPACE_ID: '60c10ca2-4115-4c1a-b6d7-04ac39fd3938'
+        run: |
+          ./scripts/setup-mcp.sh
+      
+      - name: Verify MCP Server Package
+        run: |
+          echo "Testing if @usabledev/mcp-server can be executed..."
+          npx --yes @usabledev/mcp-server@latest --version || echo "::warning::MCP server version check failed"
+          
+          echo ""
+          echo "Checking .mcp.json configuration..."
+          echo "File exists: $([ -f .mcp.json ] && echo 'YES' || echo 'NO')"
+          
+          if [ -f .mcp.json ]; then
+            echo ""
+            echo "Full .mcp.json content (with token partially masked for security):"
+            cat .mcp.json | sed -E 's/(mmesh_[a-zA-Z0-9_]{6})[a-zA-Z0-9_]*/\1***/g'
+            
+            echo ""
+            echo "Parsed configuration:"
+            jq '.' .mcp.json 2>&1 || echo "::warning::Failed to parse JSON"
+            
+            echo ""
+            echo "Command that will be executed:"
+            jq -r '.mcpServers.usable.command + " " + (.mcpServers.usable.args | join(" "))' .mcp.json 2>&1 || echo "::warning::Failed to extract command"
+            
+            echo ""
+            echo "Environment variables configured in .mcp.json:"
+            jq -r '.mcpServers.usable.env | keys[]' .mcp.json 2>&1 || echo "::warning::Failed to extract env vars"
+          else
+            echo "::error::.mcp.json file not found!"
+          fi
+          
+          echo ""
+          echo "ForgeCode MCP servers:"
+          forge mcp list
+      
+      - name: Test MCP Connection
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+          USABLE_URL: ${{ vars.USABLE_URL || 'https://usable.dev' }}
+          PROVIDER: ${{ vars.PROVIDER || 'auto' }}
+          MODEL: ${{ vars.MODEL || 'anthropic/claude-haiku-4.5' }}
+        run: |
+          ./scripts/test-mcp-connection.sh
+      
+      - name: Upload MCP Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-test-results
+          path: |
+            /tmp/mcp-test-*.txt
+            /tmp/mcp-test-*.json
+          retention-days: 7
+          if-no-files-found: warn
 
   integration-test:
     name: Integration Test
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    needs: test-mcp-connection
     permissions:
       contents: read
       pull-requests: write
@@ -237,6 +324,21 @@ jobs:
           
           ## Your Task
           Validate this PR for the usable-pr-validator GitHub Action repository.
+          
+          ### Step 0: Verify MCP Connection (REQUIRED - CRITICAL)
+          **YOU MUST TEST THE USABLE MCP CONNECTION FIRST:**
+          
+          1. Call the `mcp_usable_list-workspaces` tool with `{"includeArchived": false}`
+          2. In your report, include the EXACT output showing:
+             - Total number of workspaces found
+             - Name of each workspace
+             - Whether the expected workspace "Flowcore" (ID: 60c10ca2-4115-4c1a-b6d7-04ac39fd3938) was found
+          
+          **CRITICAL**: If you do not call this tool and show the results, your report will be considered INVALID.
+          
+          Expected result: Should find at least the "Flowcore" workspace.
+          
+          If the MCP connection fails, report this as a CRITICAL VIOLATION with the exact error message.
           
           ### Step 1: Get PR Changes
           ```bash
@@ -279,6 +381,22 @@ jobs:
           
           # PR Validation Report
           
+          ## MCP Connection Verification ✅ (REQUIRED)
+          
+          **MCP Server**: https://usable.dev/api/mcp
+          
+          ### Connection Test Results:
+          - **Status**: Connected ✅ or Failed ❌
+          - **Tool Called**: `mcp_usable_list-workspaces`
+          - **Total Workspaces Found**: [exact number]
+          - **Workspaces**:
+            - [Workspace 1 name] (ID: [uuid])
+            - [Workspace 2 name] (ID: [uuid])
+            - ...
+          - **Target Workspace Found**: ✅ Flowcore (60c10ca2-4115-4c1a-b6d7-04ac39fd3938) or ❌ Not Found
+          
+          **Verification Stamp**: 🔐 MCP connection verified on [timestamp]
+          
           ## Summary
           [Brief overview of the changes and validation results]
           
@@ -313,7 +431,7 @@ jobs:
           comment-mode: 'update'
           fail-on-critical: false
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
       
       - name: Debug Test Results
@@ -321,7 +439,7 @@ jobs:
         run: |
           echo "Test result: ${{ steps.test-action.outcome }}"
           if [ -f "/tmp/validation-full-output.md" ]; then
-            echo "::group::Full Gemini Output"
+            echo "::group::Full ForgeCode Output"
             cat /tmp/validation-full-output.md
             echo "::endgroup::"
           else
@@ -332,6 +450,7 @@ jobs:
     name: Integration Test (Documentation)
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    needs: test-mcp-connection
     permissions:
       contents: read
       pull-requests: write
@@ -372,6 +491,12 @@ jobs:
           ## Your Task
           Validate documentation changes in this PR.
           
+          ### Step 0: Verify MCP Connection (REQUIRED)
+          **YOU MUST call `mcp_usable_list-workspaces` tool first** and show the results in your report with:
+          - Total workspaces found
+          - List of workspace names and IDs
+          - Confirmation that "Flowcore" workspace was found
+          
           ### Get Changes
           ```bash
           # Compare base ref (branch or tag) with HEAD for markdown files
@@ -398,6 +523,12 @@ jobs:
           ## Output Format
           
           # PR Validation Report
+          
+          ## MCP Connection Verification ✅
+          - **Status**: Connected ✅ or Failed ❌
+          - **Workspaces Found**: [count]
+          - **Target Workspace**: ✅ Flowcore found or ❌ Not Found
+          - **Verification Stamp**: 🔐 MCP verified
           
           ## Summary
           [Overview of documentation changes]
@@ -430,7 +561,7 @@ jobs:
           comment-mode: 'update'
           fail-on-critical: false
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
       
       - name: Debug Documentation Results
@@ -438,7 +569,7 @@ jobs:
         run: |
           echo "Docs test result: ${{ steps.docs-action.outcome }}"
           if [ -f "/tmp/validation-full-output.md" ]; then
-            echo "::group::Full Gemini Output"
+            echo "::group::Full ForgeCode Output"
             cat /tmp/validation-full-output.md
             echo "::endgroup::"
           else
@@ -449,6 +580,7 @@ jobs:
     name: Integration Test (Comment Revalidation)
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    needs: test-mcp-connection
     permissions:
       contents: read
       pull-requests: write
@@ -489,6 +621,11 @@ jobs:
           ## Your Task
           Test the comment revalidation feature.
           
+          ### Step 0: Verify MCP Connection (REQUIRED)
+          **YOU MUST call `mcp_usable_list-workspaces` tool first** and show the results in your report with:
+          - Total workspaces found
+          - Verification that "Flowcore" workspace is accessible
+          
           ### Step 1: Verify Override Comment
           
           Check if there is an override/clarification comment in the PR context above (marked with 🔄).
@@ -514,6 +651,11 @@ jobs:
           ## Output Format
           
           # PR Validation Report
+          
+          ## MCP Connection Verification ✅
+          - **Status**: Connected ✅ or Failed ❌
+          - **Workspaces Found**: [count]
+          - **Verification Stamp**: 🔐 MCP verified
           
           ## Summary
           [Mention this is a comment revalidation test]
@@ -569,7 +711,7 @@ jobs:
           comment-mode: 'update'
           fail-on-critical: false
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
           COMMENT_AUTHOR: 'test-user'
       

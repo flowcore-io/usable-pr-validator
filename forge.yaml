@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/antinomyhq/forge/refs/heads/main/forge.schema.json
+mcpServers:
+  usable:
+    command: npx
+    args:
+      - "@usabledev/mcp-server@latest"
+      - server
+    env:
+      USABLE_API_TOKEN: ${USABLE_API_TOKEN}
+      USABLE_BASE_URL: ${USABLE_URL}

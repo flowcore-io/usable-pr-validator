@@ -1,5 +1,5 @@
 name: 'Usable PR Validator'
-description: 'Validate Pull Requests against your Usable knowledge base standards using Google Gemini AI and Usable MCP integration'
+description: 'Validate Pull Requests against your Usable knowledge base standards using ForgeCode with OpenRouter, OpenAI, Anthropic, or other LLM providers'
 author: 'Flowcore'
 
 branding:
@@ -27,22 +27,18 @@ inputs:
     description: 'User comment requesting validation override or clarification (typically from @usable mention)'
     required: false
     default: ''
-  gemini-model:
-    description: 'Gemini model to use (gemini-2.5-flash, gemini-2.0-flash, gemini-2.5-pro)'
+  provider:
+    description: 'LLM provider: openrouter, openai, anthropic, or auto (auto-detect from env vars)'
     required: false
-    default: 'gemini-2.5-flash'
-  service-account-key-secret:
-    description: 'Name of secret containing base64-encoded Gemini service account key'
+    default: 'auto'
+  model:
+    description: 'Model to use (e.g., anthropic/claude-haiku-4.5, anthropic/claude-3.7-sonnet, openai/gpt-4, meta-llama/llama-3.3-70b-instruct)'
     required: false
-    default: 'GEMINI_SERVICE_ACCOUNT_KEY'
-  mcp-server-url:
-    description: 'HTTP URL of MCP server'
+    default: 'anthropic/claude-haiku-4.5'
+  api-key-secret:
+    description: 'Name of secret containing API key (OPENROUTER_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY)'
     required: false
-    default: 'https://usable.dev/api/mcp'
-  mcp-token-secret:
-    description: 'Name of secret containing Usable API token'
-    required: false
-    default: 'USABLE_API_TOKEN'
+    default: 'OPENROUTER_API_KEY'
   workspace-id:
     description: 'Usable workspace UUID (required - used to fetch MCP system prompt)'
     required: true
@@ -164,12 +160,12 @@ runs:
       with:
         node-version: '20'
     
-    - name: Install Gemini CLI
+    - name: Install ForgeCode CLI
       shell: bash
       run: |
-        echo "::group::Installing Gemini CLI"
-        npm install -g @google/gemini-cli@0.7.0
-        echo "✅ Gemini CLI installed"
+        echo "::group::Installing ForgeCode CLI"
+        npm install -g forgecode@latest
+        echo "✅ ForgeCode CLI installed"
         echo "::endgroup::"
     
     - name: Setup Git
@@ -276,18 +272,19 @@ runs:
         echo "✅ Git configured"
         echo "::endgroup::"
     
-    - name: Setup Gemini Authentication
+    - name: Setup LLM Provider Authentication
       shell: bash
       env:
-        SECRET_NAME: ${{ inputs.service-account-key-secret }}
+        PROVIDER: ${{ inputs.provider }}
+        API_KEY_SECRET: ${{ inputs.api-key-secret }}
       run: |
-        ${{ github.action_path }}/scripts/setup-gemini.sh
+        ${{ github.action_path }}/scripts/setup-provider.sh
     
     - name: Setup MCP Server
       shell: bash
       env:
-        MCP_URL: ${{ inputs.mcp-server-url }}
-        MCP_SECRET_NAME: ${{ inputs.mcp-token-secret }}
+        USABLE_URL: ${{ env.USABLE_URL || 'https://usable.dev' }}
+        USABLE_API_TOKEN: ${{ env.USABLE_API_TOKEN }}
         WORKSPACE_ID: ${{ inputs.workspace-id }}
       run: |
         ${{ github.action_path }}/scripts/setup-mcp.sh
@@ -300,7 +297,8 @@ runs:
         WORKSPACE_ID: ${{ inputs.workspace-id }}
         CUSTOM_PROMPT_FILE: ${{ inputs.prompt-file }}
         MERGE_CUSTOM_PROMPT: ${{ inputs.merge-custom-prompt }}
-        MCP_SECRET_NAME: ${{ inputs.mcp-token-secret }}
+        USABLE_URL: ${{ env.USABLE_URL || 'https://usable.dev' }}
+        USABLE_API_TOKEN: ${{ env.USABLE_API_TOKEN }}
         ACTION_PATH: ${{ github.action_path }}
       run: |
         ${{ github.action_path }}/scripts/fetch-prompt.sh
@@ -311,7 +309,8 @@ runs:
       env:
         PROMPT_FILE: ${{ inputs.prompt-file }}
         USE_DYNAMIC_PROMPTS: ${{ inputs.use-dynamic-prompts }}
-        GEMINI_MODEL: ${{ inputs.gemini-model }}
+        PROVIDER: ${{ inputs.provider }}
+        MODEL: ${{ inputs.model }}
         MAX_RETRIES: ${{ inputs.max-retries }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         PR_TITLE: ${{ github.event.pull_request.title }}
@@ -326,7 +325,98 @@ runs:
         ALLOW_WEB_FETCH: ${{ inputs.allow-web-fetch }}
         GIT_PAGER: cat
       run: |
-        ${{ github.action_path }}/scripts/validate.sh
+        echo "::group::Running PR Validation"
+        
+        # Determine which prompt file to use
+        if [ -f "/tmp/dynamic-prompt.md" ]; then
+          ACTUAL_PROMPT="/tmp/dynamic-prompt.md"
+          echo "Using dynamic prompt from fetch-prompt.sh"
+        elif [ -n "$PROMPT_FILE" ] && [ -f "$PROMPT_FILE" ]; then
+          ACTUAL_PROMPT="$PROMPT_FILE"
+          echo "Using static prompt file: $PROMPT_FILE"
+        else
+          echo "::error::No valid prompt file found"
+          exit 1
+        fi
+        
+        # Configure ForgeCode model if specified
+        if [ -n "$MODEL" ]; then
+          echo "Configuring ForgeCode model: $MODEL"
+          forge config set --model "$MODEL" || echo "Warning: Could not set model config"
+        fi
+        
+        # Refresh MCP cache before validation
+        echo "🔄 Refreshing MCP cache..."
+        set +e
+        CACHE_OUTPUT=$(timeout 30 forge mcp cache refresh 2>&1)
+        CACHE_EXIT=$?
+        set -e
+        
+        if [ $CACHE_EXIT -eq 0 ]; then
+          echo "✅ MCP cache refreshed successfully"
+        elif [ $CACHE_EXIT -eq 124 ]; then
+          echo "⚠️ MCP cache refresh timed out after 30 seconds (continuing anyway)"
+        elif echo "$CACHE_OUTPUT" | grep -q "No such file or directory"; then
+          echo "⚠️ No cache directory exists yet (first run) - skipping cache refresh"
+        else
+          echo "⚠️ MCP cache refresh failed - continuing anyway"
+          echo "   Error: $(echo "$CACHE_OUTPUT" | grep -i "error" | head -1)"
+        fi
+        echo ""
+        
+        # Run ForgeCode directly with MCP stdio transport
+        echo "🤖 Running ForgeCode CLI with MCP stdio transport"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Provider: ${PROVIDER:-auto}"
+        echo "Model: $MODEL"
+        echo "Prompt: $ACTUAL_PROMPT"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        # Run forge and capture output
+        set +e
+        forge -p "$(cat "$ACTUAL_PROMPT")" 2>&1 | tee /tmp/validation-full-output.md
+        FORGE_EXIT=$?
+        set -e
+        
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        if [ $FORGE_EXIT -ne 0 ]; then
+          echo "::error::ForgeCode failed with exit code: $FORGE_EXIT"
+          echo "validation_status=error" >> $GITHUB_OUTPUT
+          echo "validation_passed=false" >> $GITHUB_OUTPUT
+          echo "critical_issues=0" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        
+        # Process the JSON report if it exists
+        if [ -f "/tmp/validation-report.json" ]; then
+          # Construct markdown report
+          ${{ github.action_path }}/scripts/construct-markdown.sh /tmp/validation-report.json /tmp/validation-report.md
+          
+          # Parse results
+          STATUS=$(jq -r '.validationOutcome.status' /tmp/validation-report.json)
+          CRITICAL=$(jq -r '.validationOutcome.criticalIssuesCount' /tmp/validation-report.json)
+          
+          if [ "$STATUS" = "PASS" ]; then
+            echo "validation_status=passed" >> $GITHUB_OUTPUT
+            echo "validation_passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "validation_status=failed" >> $GITHUB_OUTPUT
+            echo "validation_passed=false" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "critical_issues=${CRITICAL:-0}" >> $GITHUB_OUTPUT
+          
+          echo "✅ Validation completed: $STATUS (Critical: ${CRITICAL:-0})"
+        else
+          echo "::warning::No JSON report generated"
+          cp /tmp/validation-full-output.md /tmp/validation-report.md || true
+          echo "validation_status=completed" >> $GITHUB_OUTPUT
+          echo "validation_passed=true" >> $GITHUB_OUTPUT
+          echo "critical_issues=0" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "::endgroup::"
     
     - name: Post PR Comment
       if: inputs.comment-mode != 'none' && always()
@@ -349,9 +439,10 @@ runs:
           const markerId = commentTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
           const marker = `<!-- usable-pr-validator:${markerId} -->`;
           
-          const commentBody = marker + '\n## 🤖 ' + commentTitle + '\n\n' + 
+          const commentBody = marker + '\n## 🤖 ' + commentTitle + '\n\n' +
             report + '\n\n---\n<details>\n<summary>📊 Validation Statistics</summary>\n\n' +
-            '- **Model**: Google Gemini ${{ inputs.gemini-model }}\n' +
+            '- **Provider**: ${{ inputs.provider }}\n' +
+            '- **Model**: ${{ inputs.model }}\n' +
             '- **Standards Source**: ${{ inputs.mcp-server-url }}\n' +
             '- **Commit**: ' + context.payload.pull_request.head.sha.substring(0, 7) + '\n' +
             '- **Triggered by**: @' + context.actor + '\n\n' +
@@ -408,10 +499,13 @@ runs:
       shell: bash
       run: |
         # Remove temporary files containing sensitive data
-        rm -f /tmp/service-account.json
-        rm -f /tmp/gemini-settings.json
-        rm -f /tmp/gemini-stderr.log
-        echo "✅ Temporary files cleaned up"
+        rm -f /tmp/forge-config.yaml
+        rm -f /tmp/validation-*.md
+        
+        # Remove MCP server registration (contains authentication token)
+        forge mcp remove usable 2>/dev/null || true
+        
+        echo "✅ Temporary files and MCP registration cleaned up"
     
     - name: Fail on Critical Violations
       if: inputs.fail-on-critical == 'true' && steps.validate.outputs.validation_passed == 'false'

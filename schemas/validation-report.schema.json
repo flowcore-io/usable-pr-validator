@@ -1,0 +1,169 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PR Validation Report",
+  "description": "Structured output schema for PR validation results",
+  "type": "object",
+  "required": ["summary", "criticalViolations", "importantIssues", "suggestions", "validationOutcome"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "Brief 2-3 sentence overview of the PR and overall assessment"
+    },
+    "criticalViolations": {
+      "type": "array",
+      "description": "Must-fix issues that will fail the build",
+      "items": {
+        "type": "object",
+        "required": ["file", "issue", "why", "fix"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "File path and optional line number (e.g., 'path/to/file.ts:42')"
+          },
+          "issue": {
+            "type": "string",
+            "description": "Clear description of the violation"
+          },
+          "why": {
+            "type": "string",
+            "description": "Explanation of why this violates standards"
+          },
+          "fix": {
+            "type": "string",
+            "description": "Specific recommendation on how to fix it"
+          },
+          "code": {
+            "type": "string",
+            "description": "Optional: The problematic code snippet"
+          }
+        }
+      }
+    },
+    "importantIssues": {
+      "type": "array",
+      "description": "Should-fix issues that won't fail the build",
+      "items": {
+        "type": "object",
+        "required": ["file", "issue", "why", "fix"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "File path and optional line number"
+          },
+          "issue": {
+            "type": "string",
+            "description": "Clear description of the issue"
+          },
+          "why": {
+            "type": "string",
+            "description": "Explanation of the issue"
+          },
+          "fix": {
+            "type": "string",
+            "description": "Recommended improvement"
+          },
+          "code": {
+            "type": "string",
+            "description": "Optional: The problematic code snippet"
+          }
+        }
+      }
+    },
+    "suggestions": {
+      "type": "array",
+      "description": "Nice-to-have improvements",
+      "items": {
+        "type": "object",
+        "required": ["title", "description"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Brief title of the suggestion"
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed explanation of the suggestion"
+          },
+          "file": {
+            "type": "string",
+            "description": "Optional: Related file path"
+          }
+        }
+      }
+    },
+    "validationOutcome": {
+      "type": "object",
+      "required": ["status", "criticalIssuesCount", "importantIssuesCount", "suggestionsCount"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "FAIL"],
+          "description": "Overall validation status"
+        },
+        "criticalIssuesCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of critical violations found"
+        },
+        "importantIssuesCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of important issues found"
+        },
+        "suggestionsCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of suggestions provided"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Optional: Brief explanation of the validation outcome"
+        }
+      }
+    },
+    "overrideApplied": {
+      "type": "object",
+      "description": "Optional: Information about applied overrides (for comment-triggered revalidation)",
+      "properties": {
+        "deviation": {
+          "type": "string",
+          "description": "What deviation was approved"
+        },
+        "justification": {
+          "type": "string",
+          "description": "Why the deviation was necessary"
+        },
+        "fragmentId": {
+          "type": "string",
+          "description": "ID of the created deviation fragment"
+        },
+        "fragmentTitle": {
+          "type": "string",
+          "description": "Title of the created deviation fragment"
+        },
+        "approvedBy": {
+          "type": "string",
+          "description": "Username who approved the deviation"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional: Additional metadata about the validation",
+      "properties": {
+        "triggeredBy": {
+          "type": "string",
+          "description": "How this validation was triggered (e.g., 'PR opened', 'Comment by @user')"
+        },
+        "standardsChecked": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of standards/patterns checked"
+        }
+      }
+    }
+  }
+}
+

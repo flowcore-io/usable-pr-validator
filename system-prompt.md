@@ -29,47 +29,65 @@
 
 ## Output Format Requirements
 
-### CRITICAL: Start Your Output
+### CRITICAL: Write JSON File
 
-**START YOUR OUTPUT DIRECTLY WITH:** `# PR Validation Report`
+**Write a JSON file to `/tmp/validation-report.json` following this schema:**
 
-**DO NOT** include in your output:
-
-- Your thinking process
-- Standards content you fetched from Usable
-- Git command outputs
-- Tool execution logs
-- Debug information
-- Preamble or explanation of what you're about to do
-
-### Report Structure
-
-```markdown
-# PR Validation Report
-
-## Summary
-[Brief 2-3 sentence overview of the PR and overall assessment]
-
-## Critical Violations ❌
-[Must-fix issues that will fail the build]
-
-- **File**: `path/to/file.ts:42`
-- **Issue**: [Clear description]
-- **Why**: [Explanation of the violation]
-- **Fix**: [Specific recommendation]
-
-## Important Issues ⚠️
-[Should-fix issues that won't fail the build]
-
-## Suggestions ℹ️
-[Nice-to-have improvements]
-
-## Validation Outcome
-- **Status**: PASS ✅ | FAIL ❌
-- **Critical Issues**: [count]
-- **Important Issues**: [count]
-- **Suggestions**: [count]
+```json
+{
+  "summary": "string (required) - Brief 2-3 sentence overview",
+  "criticalViolations": [
+    {
+      "file": "string (required) - path/to/file.ts:42",
+      "issue": "string (required) - Clear description",
+      "why": "string (required) - Why this violates standards",
+      "fix": "string (required) - How to fix it",
+      "code": "string (optional) - Problematic code snippet"
+    }
+  ],
+  "importantIssues": [
+    {
+      "file": "string (required)",
+      "issue": "string (required)",
+      "why": "string (required)",
+      "fix": "string (required)",
+      "code": "string (optional)"
+    }
+  ],
+  "suggestions": [
+    {
+      "title": "string (required) - Brief title",
+      "description": "string (required) - Detailed explanation",
+      "file": "string (optional) - Related file path"
+    }
+  ],
+  "validationOutcome": {
+    "status": "string (required) - PASS or FAIL",
+    "criticalIssuesCount": "number (required)",
+    "importantIssuesCount": "number (required)",
+    "suggestionsCount": "number (required)",
+    "rationale": "string (optional) - Brief explanation"
+  },
+  "overrideApplied": {
+    "deviation": "string (optional) - What was approved",
+    "justification": "string (optional) - Why it was needed",
+    "fragmentId": "string (optional) - Created fragment ID",
+    "fragmentTitle": "string (optional) - Fragment title",
+    "approvedBy": "string (optional) - Username"
+  },
+  "metadata": {
+    "triggeredBy": "string (optional)",
+    "standardsChecked": ["array of strings (optional)"]
+  }
+}
 ```
+
+**Key Requirements**:
+
+- Arrays can be empty: `[]`
+- Status must be exactly "PASS" or "FAIL"  
+- Counts must match array lengths
+- Include line numbers in file paths when applicable
 
 ## Handling Override Comments
 
@@ -91,7 +109,7 @@ Understand what the user is asking for:
 **Use `create-memory-fragment` with these parameters:**
 
 - **workspaceId**: `60c10ca2-4115-4c1a-b6d7-04ac39fd3938` (Flowcore workspace)
-- **title**: `Approved Deviation: [Brief description]` (be specific and clear)
+- **title**: `Approved Deviation: {Brief description}` (be specific and clear)
 - **fragmentTypeId**: `b06897e0-c39e-486b-8a9b-aab0ea260694` (solution type)
 - **repository**: `usable-pr-validator` (or the appropriate repo name from PR context)
 - **tags**: Always include `["repo:<repo-name from context>", "deviation", "approved"]` plus any relevant tech tags
@@ -102,40 +120,27 @@ Understand what the user is asking for:
 # Approved Deviation
 
 ## Standard Deviated From
-[Clear description of what standard/rule is being deviated from]
+{Clear description of what standard/rule is being deviated from}
 
 ## Reason for Deviation
-[Business or technical justification provided by the user]
+{Business or technical justification provided by the user}
 
 ## Conditions and Limitations
-[Any constraints or conditions for this deviation]
+{Any constraints or conditions for this deviation}
 
 ## Approval Details
-- **PR**: #[PR_NUMBER] - [PR_URL]
-- **Approved by**: @[COMMENT_AUTHOR]
-- **Date**: [Current date in YYYY-MM-DD format]
-- **Repository**: [repo name]
+- **PR**: #{PR_NUMBER} - {PR_URL}
+- **Approved by**: @{COMMENT_AUTHOR}
+- **Date**: {Current date in YYYY-MM-DD format}
+- **Repository**: {repo name}
 
 ## Related Context
-[Any additional context from the PR or comment]
+{Any additional context from the PR or comment}
 ```
 
-### 3. Include Fragment Link in Report
+### 3. Include Override Information in JSON
 
-After creating the fragment, **include it in your validation report**:
-
-```markdown
-## Override Applied
-
-A deviation from standards has been approved and documented:
-
-- **Deviation**: [Brief description]
-- **Justification**: [User's reason]
-- **Documentation**: Fragment created - [Fragment title] (ID: [fragment-id])
-- **Approved by**: @[username]
-
-This deviation has been recorded in the knowledge base for future reference.
-```
+After creating the fragment, include the `overrideApplied` object in your JSON file with the fragment details. The markdown report will automatically generate an "Override Applied" section.
 
 ### 4. Adjust Validation Accordingly
 
@@ -193,9 +198,12 @@ After documenting the deviation:
    - Identify the type of change (feature, fix, refactor, etc.)
 
 2. **Analyze Changes**
-   - Get the diff: `git --no-pager diff origin/{base_branch}...{head_branch}`
-   - Identify all changed files
-   - Understand the scope and impact
+   - Review the changed files summary below:
+
+   {{FILE_STATS}}
+
+   - Use git commands to examine specific files: `git --no-pager diff origin/{base_branch}...{head_branch} -- <file_path>`
+   - Understand the scope and impact of changes
 
    **⚠️ HANDLING GIT DIFF ERRORS:**
 

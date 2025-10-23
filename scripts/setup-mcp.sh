@@ -3,48 +3,56 @@ set -euo pipefail
 
 echo "::group::Setting up MCP Server Integration"
 
-# Get the MCP token from environment using the secret name
-MCP_TOKEN="${!MCP_SECRET_NAME:-}"
-
-if [ -z "$MCP_TOKEN" ]; then
-  echo "::error::MCP token not found in environment variable: $MCP_SECRET_NAME"
-  echo "Please ensure the secret is set in your workflow: env.$MCP_SECRET_NAME"
+# Get the Usable API token from environment
+if [ -z "${USABLE_API_TOKEN:-}" ]; then
+  echo "::error::USABLE_API_TOKEN not found"
+  echo "Please set USABLE_API_TOKEN environment variable or secret"
   exit 1
 fi
 
-# Validate MCP URL
-if [ -z "$MCP_URL" ]; then
-  echo "::error::MCP_URL is required when MCP is enabled"
-  exit 1
-fi
+# Get Usable URL from environment (default to usable.dev)
+USABLE_URL="${USABLE_URL:-https://usable.dev}"
 
-# Create Gemini settings file with MCP configuration
-cat > /tmp/gemini-settings.json <<EOF
+echo "Usable URL: $USABLE_URL"
+echo ""
+echo "NOTE: MCP server is configured in forge.yaml"
+echo "      Environment variables USABLE_API_TOKEN and USABLE_URL will be used"
+echo "      ForgeCode will automatically load the MCP server from project config"
+echo ""
+
+# Register MCP server with ForgeCode using stdio transport via npx (backup method)
+echo "Registering MCP server with ForgeCode CLI as backup..."
+
+# Build the server configuration JSON
+SERVER_CONFIG=$(cat <<EOF
 {
-  "mcpServers": {
-    "usable": {
-      "httpUrl": "$MCP_URL",
-      "headers": {
-        "Authorization": "Bearer $MCP_TOKEN"
-      }
-    }
+  "command": "npx",
+  "args": ["@usabledev/mcp-server@latest", "server"],
+  "env": {
+    "USABLE_API_TOKEN": "${USABLE_API_TOKEN}",
+    "USABLE_BASE_URL": "${USABLE_URL}"
   }
 }
 EOF
+)
 
-# Set restrictive permissions
-chmod 600 /tmp/gemini-settings.json
+echo "  Type: stdio transport via npx"
+echo "  Command: npx @usabledev/mcp-server@latest server"
+echo "  Base URL: ${USABLE_URL}"
+echo ""
 
-# Set environment variable for Gemini CLI to use this settings file
-export GEMINI_SETTINGS="/tmp/gemini-settings.json"
-echo "GEMINI_SETTINGS=/tmp/gemini-settings.json" >> $GITHUB_ENV
+# Remove existing server if it exists (to avoid conflicts)
+forge mcp remove usable 2>/dev/null || true
 
-echo "✅ MCP server configured"
-echo "  URL: $MCP_URL"
-echo "  Settings file: /tmp/gemini-settings.json"
-
-# Debug: Show settings file content (mask token)
-echo "  Configuration preview:"
-cat /tmp/gemini-settings.json | sed 's/"Bearer [^"]*"/"Bearer ***MASKED***"/g' | sed 's/^/    /'
+# Register the server
+if forge mcp add-json usable "$SERVER_CONFIG" --scope local 2>&1; then
+  echo "✅ MCP server 'usable' registered successfully"
+  echo ""
+  echo "Verifying registration..."
+  forge mcp list 2>&1 | grep -i "usable" || echo "⚠️ Server registered but not shown in list"
+else
+  echo "::error::Failed to register MCP server with ForgeCode"
+  exit 1
+fi
 
 echo "::endgroup::"

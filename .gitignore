@@ -2,6 +2,7 @@
 .DS_Store
 .AppleDouble
 .LSOverride
+.mcp.json
 
 # Secrets and credentials
 *.json.key

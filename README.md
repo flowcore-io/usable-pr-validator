@@ -1,6 +1,6 @@
 # 🤖 Usable PR Validator
 
-> Validate Pull Requests against your Usable knowledge base standards using Google Gemini AI
+> Validate Pull Requests against your Usable knowledge base standards using AI (OpenRouter, Anthropic, OpenAI, and more)
 
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Usable%20PR%20Validator-blue?logo=github)](https://github.com/marketplace/actions/usable-pr-validator)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -8,9 +8,10 @@
 
 ## ✨ Features
 
-- 🧠 **AI-Powered Validation**: Uses Google Gemini to understand context and architectural patterns
+- 🧠 **AI-Powered Validation**: Uses advanced AI models (Claude, GPT-4, Llama, etc.) via ForgeCode
+- 🔌 **Multi-Provider Support**: OpenRouter, Anthropic, OpenAI, and more - bring your own API key
 - 📚 **Usable Integration**: Validate PRs against your team's knowledge base stored in Usable
-- 🔌 **MCP Protocol**: Connects directly to Usable's MCP server for real-time standards
+- 🔗 **MCP Protocol**: Connects directly to Usable's MCP server for real-time standards
 - 🎯 **System Prompts**: Organization-wide validation standards fetched from Usable and auto-merged
 - 🚀 **Dynamic Prompts**: Fetch latest validation prompts from Usable API (no static files needed!)
 - 💬 **Comment-Triggered Revalidation**: Mention `@usable` in PR comments to trigger revalidation with context
@@ -25,10 +26,12 @@
 
 ### Prerequisites
 
-1. A Google Cloud project with Vertex AI API enabled
-2. A service account key with Vertex AI permissions
-3. A Usable account with API token ([get one at usable.dev](https://usable.dev))
-4. GitHub repository with pull requests
+1. An API key from one of:
+   - [OpenRouter](https://openrouter.ai) (recommended - access to 200+ models)
+   - [Anthropic](https://console.anthropic.com) (Claude models)
+   - [OpenAI](https://platform.openai.com) (GPT models)
+2. A Usable account with API token ([get one at usable.dev](https://usable.dev))
+3. GitHub repository with pull requests
 
 ### Step 1: Create Validation Prompt
 
@@ -57,12 +60,7 @@ git diff origin/{{BASE_BRANCH}}...{{HEAD_BRANCH}}
 
 Go to your repository Settings → Secrets → Actions and add:
 
-- `GEMINI_SERVICE_ACCOUNT_KEY`: Base64-encoded service account JSON key
-
-  ```bash
-  cat service-account.json | base64
-  ```
-
+- `OPENROUTER_API_KEY`: Your OpenRouter API key (or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`)
 - `USABLE_API_TOKEN`: Your Usable API token (get from [usable.dev](https://usable.dev) → Settings → API Tokens)
 
 ### Step 3: Create Workflow
@@ -87,17 +85,88 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - uses: flowcore/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/pr-validation.md'
           workspace-id: 'your-workspace-uuid'
+          # Optional: specify provider and model (defaults to auto-detect and anthropic/claude-haiku-4.5)
+          # provider: 'openrouter'  # or 'anthropic', 'openai', 'auto'
+          # model: 'anthropic/claude-3.7-sonnet'  # for higher quality
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
 That's it! Your PRs will now be validated automatically. 🎉
+
+## 🧪 Local Testing
+
+You can test the PR validator locally before pushing to GitHub Actions:
+
+### Required Environment Variables
+
+```bash
+# At least one of these API keys (depending on your provider)
+export OPENROUTER_API_KEY='your-openrouter-key'     # Recommended
+# OR
+export ANTHROPIC_API_KEY='your-anthropic-key'       # For direct Anthropic
+# OR
+export OPENAI_API_KEY='your-openai-key'             # For OpenAI
+
+# Required
+export USABLE_API_TOKEN='your-usable-token'
+
+# Optional (can be set in the script or use defaults)
+export USABLE_URL='https://usable.dev'              # Usable instance URL (default)
+export PROVIDER='auto'                               # or 'openrouter', 'anthropic', 'openai'
+export MODEL='anthropic/claude-haiku-4.5'           # default model (fast and cost-effective)
+export WORKSPACE_ID='your-workspace-uuid'           # Usable workspace
+export BASE_BRANCH='main'                           # base branch for diff
+export HEAD_BRANCH='feature-branch'                 # current branch
+```
+
+### Run Local Test
+
+```bash
+# Make sure you're on the branch you want to test
+git checkout your-feature-branch
+
+# Run the full validation test
+./test-local.sh
+
+# OR test MCP connection only (faster, verifies Usable integration)
+./test-local.sh --mcp-only
+```
+
+The full test will:
+1. Verify all required environment variables are set
+2. Install ForgeCode CLI if not already installed
+3. Fetch the necessary git refs
+4. Set up the provider authentication
+5. Run the validation
+6. Display the results and save artifacts to `/tmp/`
+
+The MCP-only test will:
+1. Verify environment variables (API keys)
+2. Install ForgeCode CLI if needed
+3. Configure the Usable MCP server
+4. Test that MCP tools are available to the AI model
+5. Verify workspace access and authentication
+6. Display connection results
+
+**Tip**: Run `--mcp-only` first to verify your Usable integration is working before running a full validation.
+
+### Viewing Results
+
+**Full validation:**
+- **Full output**: `/tmp/validation-full-output.md`
+- **Validation report**: `/tmp/validation-report.md`
+- **GitHub outputs**: `/tmp/github-output.txt`
+
+**MCP test:**
+- **MCP test output**: `/tmp/mcp-test-output.txt`
+- **MCP test results**: `/tmp/mcp-test-result.json`
 
 ## 📖 Configuration
 
@@ -110,10 +179,9 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `prompt-fragment-id` | Usable fragment UUID to use as prompt (required when `use-dynamic-prompts` is `true`) | ✓ (with dynamic prompts) | |
 | `workspace-id` | Usable workspace UUID (required - used to fetch MCP system prompt) | ✓ | |
 | `merge-custom-prompt` | Merge fetched Usable prompt with custom `prompt-file` (only when both are provided) | | `true` |
-| `gemini-model` | Gemini model to use (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.5-pro`) | | `gemini-2.5-flash` |
-| `service-account-key-secret` | Secret name for service account key | | `GEMINI_SERVICE_ACCOUNT_KEY` |
-| `mcp-server-url` | Usable MCP server URL | | `https://usable.dev/api/mcp` |
-| `mcp-token-secret` | Secret name for Usable API token | | `USABLE_API_TOKEN` |
+| `provider` | LLM provider: `openrouter`, `openai`, `anthropic`, or `auto` (auto-detect from env vars) | | `auto` |
+| `model` | Model to use (e.g., `anthropic/claude-haiku-4.5`, `anthropic/claude-3.7-sonnet`, `openai/gpt-4`, `meta-llama/llama-3.3-70b-instruct`) | | `anthropic/claude-haiku-4.5` |
+| `api-key-secret` | Name of secret containing API key | | `OPENROUTER_API_KEY` |
 | `fail-on-critical` | Fail build on critical violations | | `true` |
 | `comment-mode` | PR comment behavior (`update`/`new`/`none`) | | `update` |
 | `comment-title` | Title for PR comment (for multi-stage validation) | | `Automated Standards Validation` |
@@ -124,7 +192,51 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `head-ref` | Head reference for diff comparison | | PR head branch |
 | `allow-web-fetch` | Allow AI to use web_fetch tool for external resources (security consideration) | | `false` |
 
-> **Note**: You must set the `USABLE_API_TOKEN` secret (or the custom secret name specified in `mcp-token-secret`). Usable MCP integration is required for this action.
+#### Environment Variables (Required in Workflow)
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `OPENROUTER_API_KEY` | Your OpenRouter API key (or `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`) | ✓ |
+| `USABLE_API_TOKEN` | Your Usable API token for MCP integration | ✓ |
+| `USABLE_URL` | Usable instance URL (defaults to `https://usable.dev`) | |
+
+> **Note**: You must set the `USABLE_API_TOKEN` secret. Usable MCP integration is required for this action.
+
+### 🔗 MCP Integration (Automatic)
+
+The action automatically configures the **Usable MCP (Model Context Protocol) server** to give the AI model access to your team's knowledge base during validation.
+
+**How it works:**
+
+1. The action uses the `@usabledev/mcp-server` package (stdio transport)
+2. Runs as a subprocess via `npx @usabledev/mcp-server@latest server`
+3. Authenticates using the `USABLE_API_TOKEN` environment variable
+4. Provides the AI model with tools like:
+   - `mcp_usable_list-workspaces` - List accessible workspaces
+   - `mcp_usable_agentic-search-fragments` - Search knowledge base
+   - `mcp_usable_get-memory-fragment-content` - Read full fragments
+   - `mcp_usable_create-memory-fragment` - Document deviations
+   - And more...
+
+**Configuration:**
+
+- **No manual setup required** - the action configures everything automatically
+- **Node.js required** - The MCP server requires Node.js (available in GitHub Actions by default)
+- **Network access** - The MCP server connects to your Usable instance to fetch knowledge
+
+**Testing MCP Connection:**
+
+```bash
+# Test locally with the --mcp-only flag
+./test-local.sh --mcp-only
+```
+
+This will verify that:
+
+- ✅ MCP server starts successfully
+- ✅ AI model can access MCP tools
+- ✅ Workspace authentication works
+- ✅ Knowledge base is accessible
 
 ### 🧠 System Prompts (Automatic)
 
@@ -180,7 +292,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     prompt-fragment-id: 'user-prompt-uuid'
     workspace-id: 'your-workspace-uuid'
   env:
-    GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 
 # Static user prompt file (most common)
@@ -189,7 +301,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     prompt-file: '.github/prompts/pr-validation.md'
     workspace-id: 'your-workspace-uuid'
   env:
-    GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
@@ -212,22 +324,36 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     prompt-file: '.github/prompts/validate.md'
     workspace-id: 'your-workspace-uuid'
   env:
-    GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
-### With Custom MCP Server
+### With Anthropic Claude
 
 ```yaml
 - uses: flowcore/usable-pr-validator@latest
   with:
     prompt-file: '.github/prompts/validate.md'
     workspace-id: 'your-workspace-uuid'
-    mcp-server-url: 'https://your-custom-mcp.com/api/mcp'
-    mcp-token-secret: 'YOUR_CUSTOM_TOKEN'
+    provider: 'anthropic'
+    model: 'claude-3.7-sonnet'
   env:
-    GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
-    YOUR_CUSTOM_TOKEN: ${{ secrets.YOUR_MCP_TOKEN }}
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+```
+
+### With OpenAI GPT
+
+```yaml
+- uses: flowcore/usable-pr-validator@latest
+  with:
+    prompt-file: '.github/prompts/validate.md'
+    workspace-id: 'your-workspace-uuid'
+    provider: 'openai'
+    model: 'gpt-4'
+  env:
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
 ### Advanced Configuration
@@ -237,17 +363,16 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
   with:
     prompt-file: '.github/validation/standards.md'
     workspace-id: 'your-workspace-uuid'
-    gemini-model: 'gemini-2.5-pro'
-    service-account-key-secret: 'MY_GEMINI_KEY'
-    mcp-server-url: 'https://confluence.company.com/api/mcp'
-    mcp-token-secret: 'CONFLUENCE_TOKEN'
+    provider: 'openrouter'
+    model: 'anthropic/claude-3.7-sonnet'
+    mcp-server-url: 'https://usable.dev/api/mcp'
     fail-on-critical: true
     comment-mode: 'update'
     artifact-retention-days: 90
     max-retries: 3
   env:
-    MY_GEMINI_KEY: ${{ secrets.GOOGLE_AI_KEY }}
-    CONFLUENCE_TOKEN: ${{ secrets.CONF_API_TOKEN }}
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
 ### Multiple Validation Stages
@@ -269,23 +394,23 @@ jobs:
           workspace-id: 'your-workspace-uuid'
           comment-title: 'Backend Validation'  # Creates unique comment
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
-  
+
   validate-frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - uses: flowcore/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/frontend-standards.md'
           workspace-id: 'your-workspace-uuid'
           comment-title: 'Frontend Validation'  # Creates unique comment
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 

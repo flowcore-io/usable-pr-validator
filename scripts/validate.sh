@@ -100,11 +100,53 @@ verify_git_refs() {
   fi
 }
 
+# Get file stats for the PR
+get_file_stats() {
+  local base="${BASE_BRANCH}"
+  local head="${HEAD_BRANCH}"
+
+  echo "Getting file statistics for PR..."
+
+  # Try to get the diff stat
+  local file_stats=""
+  if git diff --stat "origin/$base...origin/$head" 2>/dev/null; then
+    file_stats=$(git diff --stat "origin/$base...origin/$head" 2>/dev/null || echo "Unable to retrieve file statistics")
+  elif git diff --stat "$base...$head" 2>/dev/null; then
+    file_stats=$(git diff --stat "$base...$head" 2>/dev/null || echo "Unable to retrieve file statistics")
+  else
+    file_stats="Unable to retrieve file statistics. Use git commands to explore changes."
+  fi
+
+  # Also get list of changed files
+  local changed_files=""
+  if git diff --name-only "origin/$base...origin/$head" 2>/dev/null; then
+    changed_files=$(git diff --name-only "origin/$base...origin/$head" 2>/dev/null | head -100)
+  elif git diff --name-only "$base...$head" 2>/dev/null; then
+    changed_files=$(git diff --name-only "$base...$head" 2>/dev/null | head -100)
+  fi
+
+  # Format the output
+  local output="## Files Changed
+
+\`\`\`
+$file_stats
+\`\`\`
+
+## Changed Files List
+\`\`\`
+$changed_files
+\`\`\`
+
+**Note**: Use \`git --no-pager diff origin/$base...origin/$head -- <file_path>\` to examine specific files."
+
+  echo "$output"
+}
+
 # Prepare prompt with placeholder replacement
-# 
+#
 # Uses bash native string replacement for simplicity and safety.
 # For current scope (8 placeholders), this is efficient and readable.
-# 
+#
 # Alternative approaches considered:
 # - envsubst: Would require careful escaping of $ symbols in prompts
 # - sed: More complex escaping, harder to maintain
@@ -117,7 +159,7 @@ verify_git_refs() {
 prepare_prompt() {
   local prompt_file="$1"
   local output_file="/tmp/validation-prompt.txt"
-  
+
   # Create PR context block
   PR_CONTEXT="**PR #${PR_NUMBER}**: ${PR_TITLE}
 
@@ -129,7 +171,7 @@ prepare_prompt() {
 ${PR_DESCRIPTION:-No description provided}"
 
   # Add override comment if provided
-  if [ -n "$OVERRIDE_COMMENT" ]; then
+  if [ -n "${OVERRIDE_COMMENT:-}" ]; then
     PR_CONTEXT="${PR_CONTEXT}
 
 **🔄 Override/Clarification Comment** (from @${COMMENT_AUTHOR:-unknown}):
@@ -147,13 +189,18 @@ ${OVERRIDE_COMMENT}
     web_fetch_policy="**Web fetch is DISABLED** for this validation. DO NOT use the \`web_fetch\` tool or attempt to download content from URLs. All validation must be performed using only the git repository contents, PR context, and Usable MCP knowledge base."
   fi
 
+  # Get file statistics
+  local file_stats
+  file_stats=$(get_file_stats)
+
   # Read prompt template
   PROMPT_CONTENT=$(cat "$prompt_file")
-  
+
   # Replace placeholders using bash string replacement (NOT sed)
   # This handles special characters safely
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{WEB_FETCH_POLICY\}\}/${web_fetch_policy}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_CONTEXT\}\}/${PR_CONTEXT}}"
+  PROMPT_CONTENT="${PROMPT_CONTENT//\{\{FILE_STATS\}\}/${file_stats}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{BASE_BRANCH\}\}/${BASE_BRANCH}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{HEAD_BRANCH\}\}/${HEAD_BRANCH}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_TITLE\}\}/${PR_TITLE}}"
@@ -162,10 +209,10 @@ ${OVERRIDE_COMMENT}
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_URL\}\}/${PR_URL}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_AUTHOR\}\}/${PR_AUTHOR}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_LABELS\}\}/${PR_LABELS:-none}}"
-  
+
   # Write to temp file
   echo "$PROMPT_CONTENT" > "$output_file"
-  
+
   # Verify prompt is not empty
   if [ ! -s "$output_file" ]; then
     echo "::error::Prompt file is empty after placeholder replacement"
@@ -176,70 +223,78 @@ ${OVERRIDE_COMMENT}
     echo "  3. Placeholder replacement failed"
     return 1
   fi
-  
+
   echo "$output_file"
 }
 
-# Run Gemini validation with retry logic
-run_gemini() {
+# Run ForgeCode validation with retry logic
+run_forgecode() {
   local prompt_file="$1"
   local retry_count=0
   local max_retries="${MAX_RETRIES:-2}"
-  
+
   while [ $retry_count -le $max_retries ]; do
-    echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running Gemini validation..."
-    
+    echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running ForgeCode validation..."
+
     # Debug: Check prompt file
     if [ ! -f "$prompt_file" ]; then
       echo "::error::Prompt file does not exist: $prompt_file"
       return 1
     fi
-    
+
     echo "Prompt file: $prompt_file"
     echo "Prompt file size: $(wc -c < "$prompt_file") bytes"
     echo "Prompt file lines: $(wc -l < "$prompt_file") lines"
-    
+
     # Show detailed execution info
-    echo "🤖 Running Gemini CLI"
+    echo "🤖 Running ForgeCode CLI"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Model: $GEMINI_MODEL"
+    echo "Provider: ${PROVIDER:-auto}"
+    echo "Model: ${MODEL}"
     echo "Prompt size: $(wc -c < "$prompt_file") bytes"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    
-    # Run Gemini CLI and capture output
+
+    # Configure ForgeCode with the specified model
+    if [ -n "${MODEL:-}" ]; then
+      echo "Configuring ForgeCode model: ${MODEL}"
+      forge config set --model "${MODEL}" 2>&1 || echo "Warning: Could not set model config"
+    fi
+
+    # Run ForgeCode CLI and capture output
     set +e  # Temporarily disable exit on error to capture exit code
-    
-    # Just use tee to show and save output - simple and effective
-    gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
+
+    # Use -p flag for non-interactive mode with prompt from file
+    # Note: Removed --verbose to get clean output without debugging info
+    forge -p "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
     local exit_code=$?
-    
+
     set -e  # Re-enable exit on error
-    
+
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
+
     if [ $exit_code -eq 0 ]; then
-      echo "✅ Gemini CLI completed successfully (exit code: 0)"
+      echo "✅ ForgeCode CLI completed successfully (exit code: 0)"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       return 0
     else
-      echo "❌ Gemini CLI failed (exit code: $exit_code)"
+      echo "❌ ForgeCode CLI failed (exit code: $exit_code)"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo ""
-      
+
       # Error details are shown above in the output
       echo "⚠️ Check the output above for error details"
-      
+
       # Check if it's a retryable error
       local is_retryable=false
       if [ -f /tmp/validation-full-output.md ] && grep -q -E "(429|503|timeout|rate limit)" /tmp/validation-full-output.md; then
         is_retryable=true
       fi
-      
+
       if [ "$is_retryable" = true ]; then
         retry_count=$((retry_count + 1))
-        
+
         if [ $retry_count -le $max_retries ]; then
           wait_time=$((2 ** retry_count))
           echo "⏳ Rate limit or timeout detected. Retrying after ${wait_time} seconds..."
@@ -255,50 +310,59 @@ run_gemini() {
       fi
     fi
   done
-  
+
   return 1
 }
 
-# Extract validation report from Gemini output
+# Extract validation report from ForgeCode output
 extract_report() {
   local full_output="$1"
   local report_file="/tmp/validation-report.md"
+  local clean_output="/tmp/validation-clean-output.md"
+  
+  # First, strip ANSI escape codes from the output
+  # This handles color codes and formatting that might interfere with pattern matching
+  if command -v sed &> /dev/null; then
+    sed 's/\x1b\[[0-9;]*m//g' "$full_output" > "$clean_output"
+  else
+    cp "$full_output" "$clean_output"
+  fi
   
   # Strategy 1: Look for "# PR Validation Report" header
-  if grep -q "# PR Validation Report" "$full_output"; then
+  if grep -q "# PR Validation Report" "$clean_output"; then
     echo "Extracting report using Strategy 1: PR Validation Report header"
-    sed -n '/# PR Validation Report/,$p' "$full_output" > "$report_file"
+    sed -n '/# PR Validation Report/,$p' "$clean_output" > "$report_file"
     return 0
   fi
   
   # Strategy 2: Look for "## Summary" section
-  if grep -q "## Summary" "$full_output"; then
+  if grep -q "## Summary" "$clean_output"; then
     echo "Extracting report using Strategy 2: Summary section"
-    sed -n '/## Summary/,$p' "$full_output" > "$report_file"
+    sed -n '/## Summary/,$p' "$clean_output" > "$report_file"
     echo "# PR Validation Report" | cat - "$report_file" > /tmp/temp && mv /tmp/temp "$report_file"
     return 0
   fi
   
   # Strategy 3: Look for "## Critical Violations" section
-  if grep -q "## Critical Violations" "$full_output"; then
+  if grep -q "## Critical Violations" "$clean_output"; then
     echo "Extracting report using Strategy 3: Critical Violations section"
-    sed -n '/## Critical Violations/,$p' "$full_output" > "$report_file"
+    sed -n '/## Critical Violations/,$p' "$clean_output" > "$report_file"
     echo "# PR Validation Report" | cat - "$report_file" > /tmp/temp && mv /tmp/temp "$report_file"
     return 0
   fi
   
   # Strategy 4: Use full output with warning
   echo "::warning::Could not find report markers. Using full output."
-  echo "::group::Gemini Full Output (first 50 lines)"
-  head -50 "$full_output" || echo "Could not read output file"
+  echo "::group::ForgeCode Full Output (first 50 lines)"
+  head -50 "$clean_output" || echo "Could not read output file"
   echo "::endgroup::"
   
-  if [ ! -f "$full_output" ]; then
-    echo "::error::Full output file does not exist: $full_output"
+  if [ ! -f "$clean_output" ]; then
+    echo "::error::Clean output file does not exist: $clean_output"
     return 1
   fi
   
-  cp "$full_output" "$report_file"
+  cp "$clean_output" "$report_file"
   
   if [ ! -f "$report_file" ]; then
     echo "::error::Failed to create report file: $report_file"
@@ -309,16 +373,20 @@ extract_report() {
   return 0
 }
 
-# Parse validation results and set GitHub outputs
+# Parse validation results from JSON and set GitHub outputs
 parse_results() {
-  local report_file="$1"
+  local json_file="/tmp/validation-report.json"
   
-  # Check for PASS/FAIL status
+  # Extract values from JSON
   local validation_status
   local validation_passed
   local critical_issues
+  local status
   
-  if grep -q -i "Status.*PASS" "$report_file" || grep -q "✅" "$report_file"; then
+  # Get status from JSON
+  status=$(jq -r '.validationOutcome.status' "$json_file")
+  
+  if [ "$status" = "PASS" ]; then
     validation_status="passed"
     validation_passed="true"
   else
@@ -326,10 +394,8 @@ parse_results() {
     validation_passed="false"
   fi
   
-  # Count critical issues (looking for unchecked critical violations)
-  # Strip any whitespace/newlines and ensure we get a clean integer
-  critical_issues=$(grep -c "^- \[ \] \*\*" "$report_file" 2>/dev/null || echo "0")
-  critical_issues=$(echo "$critical_issues" | tr -d '\n\r' | tr -d ' ')
+  # Get critical issues count from JSON
+  critical_issues=$(jq -r '.validationOutcome.criticalIssuesCount' "$json_file")
   
   # Ensure we have a valid integer (default to 0 if empty or invalid)
   if ! [[ "$critical_issues" =~ ^[0-9]+$ ]]; then
@@ -390,9 +456,9 @@ main() {
   prompt_with_replacements=$(prepare_prompt "$actual_prompt_file")
   
   echo "Prompt prepared: $prompt_with_replacements"
-  
-  # Run Gemini validation
-  if ! run_gemini "$prompt_with_replacements"; then
+
+  # Run ForgeCode validation
+  if ! run_forgecode "$prompt_with_replacements"; then
     echo "::error::Validation execution failed"
     
     # Set failed outputs using heredoc delimiter
@@ -412,30 +478,54 @@ main() {
     exit 1
   fi
   
-  # Extract report from output
-  echo "::group::Extracting validation report"
-  echo "Full output file: /tmp/validation-full-output.md"
-  if [ -f "/tmp/validation-full-output.md" ]; then
-    echo "✅ Full output file exists ($(wc -l < /tmp/validation-full-output.md) lines)"
-  else
-    echo "::error::Full output file does not exist!"
-    exit 1
-  fi
+  # Check if JSON report was created
+  echo "::group::Processing validation report"
   
-  if ! extract_report "/tmp/validation-full-output.md"; then
-    echo "::error::Failed to extract validation report"
+  if [ ! -f "/tmp/validation-report.json" ]; then
+    echo "::error::JSON report file not created by ForgeCode"
+    echo "Expected file: /tmp/validation-report.json"
+    echo ""
+    echo "::group::ForgeCode output (for debugging)"
+    if [ -f "/tmp/validation-full-output.md" ]; then
+      head -100 "/tmp/validation-full-output.md" || echo "Could not read output file"
+    fi
+    echo "::endgroup::"
     echo "::endgroup::"
     exit 1
   fi
+  
+  echo "✅ JSON report found"
+  
+  # Validate JSON
+  if ! jq empty "/tmp/validation-report.json" 2>/dev/null; then
+    echo "::error::Invalid JSON in report file"
+    echo "::group::JSON content"
+    cat "/tmp/validation-report.json" || echo "Could not read JSON file"
+    echo "::endgroup::"
+    echo "::endgroup::"
+    exit 1
+  fi
+  
+  echo "✅ JSON is valid"
+  
+  # Construct markdown report from JSON
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if ! "$SCRIPT_DIR/construct-markdown.sh" "/tmp/validation-report.json" "/tmp/validation-report.md"; then
+    echo "::error::Failed to construct markdown from JSON"
+    echo "::endgroup::"
+    exit 1
+  fi
+  
+  echo "✅ Markdown report constructed"
   echo "::endgroup::"
   
   # Parse results and set outputs
   echo "Parsing validation results..."
   
   # Set GitHub outputs and get results
-  if [ -f "/tmp/validation-report.md" ]; then
+  if [ -f "/tmp/validation-report.json" ]; then
     # parse_results writes to GITHUB_OUTPUT and returns display values
-    results=$(parse_results "/tmp/validation-report.md")
+    results=$(parse_results)
     
     # Extract values for display (pipe-separated format)
     IFS='|' read -r validation_status validation_passed critical_issues <<< "$results"
