@@ -503,7 +503,7 @@ runs:
         rm -f /tmp/validation-*.md
         
         # Remove MCP server registration (contains authentication token)
-        forge mcp remove usable-local 2>/dev/null || true
+        forge mcp remove usable 2>/dev/null || true
         
         echo "✅ Temporary files and MCP registration cleaned up"
     

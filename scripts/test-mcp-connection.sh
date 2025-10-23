@@ -5,8 +5,8 @@ echo "::group::Testing MCP Connection"
 
 # Check if MCP server is registered with ForgeCode
 echo "Checking registered MCP servers..."
-if ! forge mcp list 2>&1 | grep -q "usable-local"; then
-  echo "::error::MCP server 'usable-local' not found in ForgeCode configuration"
+if ! forge mcp list 2>&1 | grep -q "usable"; then
+  echo "::error::MCP server 'usable' not found in ForgeCode configuration"
   echo "Available servers:"
   forge mcp list 2>&1 || echo "  (none)"
   echo ""
@@ -14,10 +14,10 @@ if ! forge mcp list 2>&1 | grep -q "usable-local"; then
   exit 1
 fi
 
-echo "✅ MCP server 'usable-local' is registered"
+echo "✅ MCP server 'usable' is registered"
 echo ""
 echo "Configuration:"
-forge mcp get usable-local 2>&1 || echo "  (Unable to retrieve configuration)"
+forge mcp get usable 2>&1 || echo "  (Unable to retrieve configuration)"
 
 echo ""
 echo "Creating MCP test prompt..."
