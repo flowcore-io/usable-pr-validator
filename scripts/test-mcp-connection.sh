@@ -3,18 +3,21 @@ set -euo pipefail
 
 echo "::group::Testing MCP Connection"
 
-# Check if .mcp.json exists
-if [ ! -f ".mcp.json" ]; then
-  echo "::error::.mcp.json file not found"
-  echo "MCP server configuration is missing"
+# Check if MCP server is registered with ForgeCode
+echo "Checking registered MCP servers..."
+if ! forge mcp list 2>&1 | grep -q "usable-local"; then
+  echo "::error::MCP server 'usable-local' not found in ForgeCode configuration"
+  echo "Available servers:"
+  forge mcp list 2>&1 || echo "  (none)"
+  echo ""
+  echo "Please run setup-mcp.sh first to register the MCP server"
   exit 1
 fi
 
-echo "✅ .mcp.json file found"
+echo "✅ MCP server 'usable-local' is registered"
 echo ""
 echo "Configuration:"
-# Show config without exposing token
-jq '.mcpServers | to_entries[] | {name: .key, command: .value.command, args: .value.args, hasToken: (.value.env.USABLE_API_TOKEN != null)}' .mcp.json
+forge mcp get usable-local 2>&1 || echo "  (Unable to retrieve configuration)"
 
 echo ""
 echo "Creating MCP test prompt..."
@@ -103,7 +106,6 @@ echo "  Authentication passed via USABLE_API_TOKEN environment variable"
 echo ""
 echo "Running ForgeCode with MCP test prompt..."
 echo "Current working directory: $(pwd)"
-echo ".mcp.json exists in PWD: $([ -f .mcp.json ] && echo 'YES' || echo 'NO')"
 echo ""
 echo "Capturing both stdout and stderr to see MCP initialization..."
 
