@@ -35,8 +35,7 @@ cat > .mcp.json <<EOF
       "command": "npx",
       "args": ["@usabledev/mcp-server@latest", "server"],
       "env": {
-        "USABLE_API_TOKEN": "$USABLE_API_TOKEN",
-        "USABLE_BASE_URL": "$USABLE_URL"
+        "USABLE_API_TOKEN": "$USABLE_API_TOKEN"
       }
     }
   }
