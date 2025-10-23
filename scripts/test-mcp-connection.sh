@@ -111,6 +111,8 @@ ps aux | grep -i "mcp-server\|@usabledev" | grep -v grep || echo "No MCP server 
 
 echo ""
 echo "Running ForgeCode with MCP test prompt..."
+echo "Current working directory: $(pwd)"
+echo ".mcp.json exists in PWD: $([ -f .mcp.json ] && echo 'YES' || echo 'NO')"
 echo ""
 echo "Capturing both stdout and stderr to see MCP initialization..."
 
