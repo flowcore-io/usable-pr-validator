@@ -15,8 +15,15 @@ USABLE_URL="${USABLE_URL:-https://usable.dev}"
 
 echo "Usable URL: $USABLE_URL"
 
+# Install @usabledev/mcp-server globally for faster startup
+echo ""
+echo "Installing @usabledev/mcp-server globally..."
+npm install -g @usabledev/mcp-server@latest 2>&1 | grep -E "added|up to date|@usabledev" || echo "  Installation output suppressed"
+echo "✅ MCP server package installed"
+
 # Write .mcp.json file in the working directory with authentication
 # ForgeCode loads MCP servers from .mcp.json in the current directory
+echo ""
 echo "Writing .mcp.json configuration..."
 
 # Create the .mcp.json file with the Usable MCP server configuration
@@ -38,7 +45,7 @@ EOF
 
 echo "✅ MCP server configured in .mcp.json"
 echo "  Type: stdio (via @usabledev/mcp-server)"
-echo "  Command: npx @usabledev/mcp-server@latest server"
+echo "  Command: usable-mcp-server server (globally installed)"
 echo "  Auth: Via USABLE_API_TOKEN environment variable"
 
 # Verify the configuration
