@@ -14,7 +14,7 @@ echo "✅ .mcp.json file found"
 echo ""
 echo "Configuration:"
 # Show config without exposing token
-jq '.mcpServers | to_entries[] | {name: .key, command: .value.command, hasToken: (.value.env.USABLE_API_TOKEN != null)}' .mcp.json
+jq '.mcpServers | to_entries[] | {name: .key, command: .value.command, args: .value.args, hasToken: (.value.env.USABLE_API_TOKEN != null)}' .mcp.json
 
 echo ""
 echo "Creating MCP test prompt..."
@@ -81,9 +81,15 @@ echo "Checking if ForgeCode can see MCP servers in config..."
 forge mcp list 2>&1 || echo "⚠️  forge mcp list command not available or failed"
 
 echo ""
-echo "Note: Using HTTP transport to ${USABLE_URL}/api/mcp"
-echo "  This avoids stdio subprocess issues in CI environments"
-echo "  Authorization is passed via env.AUTHORIZATION in .mcp.json"
+echo "🔄 Refreshing MCP cache..."
+set +e
+timeout 30 forge mcp cache refresh 2>&1 || echo "⚠️ MCP cache refresh timed out or failed (continuing anyway)"
+set -e
+
+echo ""
+echo "Note: Using stdio transport via npx @usabledev/mcp-server"
+echo "  Direct subprocess communication for better control"
+echo "  Authentication passed via USABLE_API_TOKEN environment variable"
 
 echo ""
 echo "Running ForgeCode with MCP test prompt..."
@@ -98,8 +104,8 @@ echo "Running ForgeCode with --verbose flag..."
 forge --verbose -p "$(cat /tmp/mcp-test-prompt.txt)" 2>&1 | tee /tmp/mcp-test-output.txt &
 FORGE_PID=$!
 
-# Wait for ForgeCode to initialize and connect to HTTP MCP server
-echo "Waiting for ForgeCode to connect to HTTP MCP server..."
+# Wait for ForgeCode to initialize and connect to MCP server via stdio
+echo "Waiting for ForgeCode to initialize MCP stdio connection..."
 sleep 5
 
 # Check for any MCP-related patterns in the output
