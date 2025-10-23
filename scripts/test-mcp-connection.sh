@@ -115,6 +115,8 @@ echo "Capturing both stdout and stderr to see MCP initialization..."
 # Run ForgeCode with the test prompt, capturing all output including stderr
 # Use --verbose flag for detailed output
 echo "Running ForgeCode with --verbose flag..."
+echo "Waiting 5 seconds before starting ForgeCode to ensure MCP server registration is settled..."
+sleep 5
 forge --verbose -p "$(cat /tmp/mcp-test-prompt.txt)" 2>&1 | tee /tmp/mcp-test-output.txt &
 FORGE_PID=$!
 
