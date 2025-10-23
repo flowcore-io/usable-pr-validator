@@ -15,21 +15,22 @@ USABLE_URL="${USABLE_URL:-https://usable.dev}"
 
 echo "Usable URL: $USABLE_URL"
 
-# Write .mcp.json file with streaming HTTP transport (more reliable in CI than stdio)
+# Write .mcp.json file with stdio transport using npx
 # ForgeCode loads MCP servers from .mcp.json in the current directory
 echo ""
 echo "Writing .mcp.json configuration..."
 
-# Create the .mcp.json file with streaming HTTP transport to Usable's MCP endpoint
-# This avoids stdio buffering issues in GitHub Actions CI
-# Using env.AUTHORIZATION format instead of headers for better compatibility
+# Create the .mcp.json file with stdio transport using npx
+# This uses the Usable MCP server package via npx for better subprocess control
 cat > .mcp.json <<EOF
 {
   "mcpServers": {
-    "usable": {
-      "url": "${USABLE_URL}/api/mcp",
+    "usable-local": {
+      "command": "npx",
+      "args": ["@usabledev/mcp-server@latest", "server"],
       "env": {
-        "AUTHORIZATION": "Bearer ${USABLE_API_TOKEN}"
+        "USABLE_API_TOKEN": "${USABLE_API_TOKEN}",
+        "USABLE_BASE_URL": "${USABLE_URL}"
       }
     }
   }
@@ -37,20 +38,20 @@ cat > .mcp.json <<EOF
 EOF
 
 echo "✅ MCP server configured in .mcp.json"
-echo "  Type: Streaming HTTP transport (avoids stdio issues in CI)"
-echo "  URL: ${USABLE_URL}/api/mcp"
-echo "  Auth: Via AUTHORIZATION environment variable"
+echo "  Type: stdio transport via npx"
+echo "  Command: npx @usabledev/mcp-server@latest server"
+echo "  Base URL: ${USABLE_URL}"
 
 # Verify the configuration
 if [ -f ".mcp.json" ]; then
   echo "  Configuration file created successfully"
-  echo "  MCP server 'usable' will be available to ForgeCode"
+  echo "  MCP server 'usable-local' will be available to ForgeCode"
   
   # Show config (without exposing token)
   if command -v jq &> /dev/null; then
     echo ""
     echo "  Configuration preview:"
-    jq '.mcpServers | to_entries[] | {name: .key, url: .value.url, hasAuth: (.value.env.AUTHORIZATION != null)}' .mcp.json 2>/dev/null | sed 's/^/    /' || echo "    (Preview unavailable)"
+    jq '.mcpServers | to_entries[] | {name: .key, command: .value.command, args: .value.args, hasAuth: (.value.env.USABLE_API_TOKEN != null)}' .mcp.json 2>/dev/null | sed 's/^/    /' || echo "    (Preview unavailable)"
   fi
   
   echo ""

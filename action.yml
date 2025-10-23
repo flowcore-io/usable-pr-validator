@@ -325,7 +325,79 @@ runs:
         ALLOW_WEB_FETCH: ${{ inputs.allow-web-fetch }}
         GIT_PAGER: cat
       run: |
-        ${{ github.action_path }}/scripts/validate.sh
+        echo "::group::Running PR Validation"
+        
+        # Determine which prompt file to use
+        if [ -f "/tmp/dynamic-prompt.md" ]; then
+          ACTUAL_PROMPT="/tmp/dynamic-prompt.md"
+          echo "Using dynamic prompt from fetch-prompt.sh"
+        elif [ -n "$PROMPT_FILE" ] && [ -f "$PROMPT_FILE" ]; then
+          ACTUAL_PROMPT="$PROMPT_FILE"
+          echo "Using static prompt file: $PROMPT_FILE"
+        else
+          echo "::error::No valid prompt file found"
+          exit 1
+        fi
+        
+        # Configure ForgeCode model if specified
+        if [ -n "$MODEL" ]; then
+          echo "Configuring ForgeCode model: $MODEL"
+          forge config set --model "$MODEL" || echo "Warning: Could not set model config"
+        fi
+        
+        # Run ForgeCode directly with MCP stdio transport
+        echo "🤖 Running ForgeCode CLI with MCP stdio transport"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Provider: ${PROVIDER:-auto}"
+        echo "Model: $MODEL"
+        echo "Prompt: $ACTUAL_PROMPT"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        # Run forge and capture output
+        set +e
+        forge -p "$(cat "$ACTUAL_PROMPT")" 2>&1 | tee /tmp/validation-full-output.md
+        FORGE_EXIT=$?
+        set -e
+        
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        if [ $FORGE_EXIT -ne 0 ]; then
+          echo "::error::ForgeCode failed with exit code: $FORGE_EXIT"
+          echo "validation_status=error" >> $GITHUB_OUTPUT
+          echo "validation_passed=false" >> $GITHUB_OUTPUT
+          echo "critical_issues=0" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        
+        # Process the JSON report if it exists
+        if [ -f "/tmp/validation-report.json" ]; then
+          # Construct markdown report
+          ${{ github.action_path }}/scripts/construct-markdown.sh /tmp/validation-report.json /tmp/validation-report.md
+          
+          # Parse results
+          STATUS=$(jq -r '.validationOutcome.status' /tmp/validation-report.json)
+          CRITICAL=$(jq -r '.validationOutcome.criticalIssuesCount' /tmp/validation-report.json)
+          
+          if [ "$STATUS" = "PASS" ]; then
+            echo "validation_status=passed" >> $GITHUB_OUTPUT
+            echo "validation_passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "validation_status=failed" >> $GITHUB_OUTPUT
+            echo "validation_passed=false" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "critical_issues=${CRITICAL:-0}" >> $GITHUB_OUTPUT
+          
+          echo "✅ Validation completed: $STATUS (Critical: ${CRITICAL:-0})"
+        else
+          echo "::warning::No JSON report generated"
+          cp /tmp/validation-full-output.md /tmp/validation-report.md || true
+          echo "validation_status=completed" >> $GITHUB_OUTPUT
+          echo "validation_passed=true" >> $GITHUB_OUTPUT
+          echo "critical_issues=0" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "::endgroup::"
     
     - name: Post PR Comment
       if: inputs.comment-mode != 'none' && always()
