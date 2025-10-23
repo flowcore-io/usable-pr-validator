@@ -76,6 +76,11 @@ Write your findings to `/tmp/mcp-test-result.json` in this format:
 IMPORTANT: You must write the JSON file even if no MCP tools are found.
 EOF
 
+echo ""
+echo "Checking if ForgeCode can see MCP servers in config..."
+forge mcp list 2>&1 || echo "⚠️  forge mcp list command not available or failed"
+
+echo ""
 echo "Testing MCP server startup..."
 echo "Current USABLE_API_TOKEN in shell: ${USABLE_API_TOKEN:0:20}..." # Show first 20 chars only
 
@@ -117,14 +122,24 @@ echo ""
 echo "Capturing both stdout and stderr to see MCP initialization..."
 
 # Run ForgeCode with the test prompt, capturing all output including stderr
-forge -p "$(cat /tmp/mcp-test-prompt.txt)" > /tmp/mcp-test-stdout.txt 2> /tmp/mcp-test-stderr.txt &
+# Also enable ForgeCode debug logging to see MCP initialization
+RUST_LOG=debug forge -p "$(cat /tmp/mcp-test-prompt.txt)" > /tmp/mcp-test-stdout.txt 2> /tmp/mcp-test-stderr.txt &
 FORGE_PID=$!
 
-# Wait a bit and check for MCP server subprocess and any errors
-sleep 2
+# Wait a bit longer for MCP initialization and check for processes
+sleep 5
 echo ""
 echo "Checking for MCP server processes while ForgeCode is running..."
 ps aux | grep -i "mcp-server\|@usabledev" | grep -v grep || echo "⚠️  No MCP server subprocess found!"
+
+# Check if there are any MCP-related errors in system logs
+echo ""
+echo "Checking forge stderr for MCP initialization logs..."
+if [ -f /tmp/mcp-test-stderr.txt ] && [ -s /tmp/mcp-test-stderr.txt ]; then
+  grep -i "mcp\|server\|stdio\|initialize" /tmp/mcp-test-stderr.txt || echo "No MCP-related logs in stderr"
+else
+  echo "stderr file is empty or doesn't exist yet"
+fi
 
 echo ""
 echo "Checking for errors in stderr..."
@@ -150,7 +165,22 @@ fi
 
 echo ""
 echo "::group::ForgeCode Output"
-cat /tmp/mcp-test-output.txt || echo "No output captured"
+if [ -f /tmp/mcp-test-output.txt ]; then
+  echo "Combined output (first 100 lines):"
+  head -100 /tmp/mcp-test-output.txt
+else
+  echo "No output captured"
+fi
+echo "::endgroup::"
+
+echo ""
+echo "::group::ForgeCode Debug Logs (stderr - with RUST_LOG=debug)"
+if [ -f /tmp/mcp-test-stderr.txt ] && [ -s /tmp/mcp-test-stderr.txt ]; then
+  echo "Debug logs (first 300 lines - may show MCP initialization details):"
+  head -300 /tmp/mcp-test-stderr.txt
+else
+  echo "No debug logs captured"
+fi
 echo "::endgroup::"
 
 # Check if result file was created
