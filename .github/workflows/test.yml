@@ -218,6 +218,7 @@ jobs:
       - name: Test MCP Connection
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MODEL: ${{ vars.MODEL || 'anthropic/claude-haiku-4.5' }}
         run: |
           ./scripts/test-mcp-connection.sh
       
