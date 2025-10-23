@@ -152,7 +152,8 @@ generate_diff_summary() {
       
       # Get the line ranges that changed (unified diff format gives us @@ markers)
       # -U0 means no context, just the changed lines
-      local line_ranges=$(git diff -U0 "$base_ref...$head_ref" -- "$filepath" 2>/dev/null | \
+      local line_ranges
+      line_ranges=$(git diff -U0 "$base_ref...$head_ref" -- "$filepath" 2>/dev/null | \
         grep "^@@" | \
         sed 's/@@ -[0-9,]* +\([0-9,]*\) @@.*/Line \1/' | \
         head -10 | \
