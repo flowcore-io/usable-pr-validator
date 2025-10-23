@@ -14,10 +14,14 @@ fi
 USABLE_URL="${USABLE_URL:-https://usable.dev}"
 
 echo "Usable URL: $USABLE_URL"
-
-# Register MCP server with ForgeCode using stdio transport via npx
 echo ""
-echo "Registering MCP server with ForgeCode..."
+echo "NOTE: MCP server is configured in forge.yaml"
+echo "      Environment variables USABLE_API_TOKEN and USABLE_URL will be used"
+echo "      ForgeCode will automatically load the MCP server from project config"
+echo ""
+
+# Register MCP server with ForgeCode using stdio transport via npx (backup method)
+echo "Registering MCP server with ForgeCode CLI as backup..."
 
 # Build the server configuration JSON
 SERVER_CONFIG=$(cat <<EOF
