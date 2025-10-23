@@ -81,20 +81,9 @@ echo "Checking if ForgeCode can see MCP servers in config..."
 forge mcp list 2>&1 || echo "⚠️  forge mcp list command not available or failed"
 
 echo ""
-echo "Checking available tools before ForgeCode runs..."
-forge show-tools 2>&1 | head -50 || echo "⚠️  forge show-tools command failed"
-
-echo ""
-echo "Exporting environment variables for MCP server..."
-# ForgeCode doesn't pass env vars from .mcp.json, so we export them globally
-export USABLE_API_TOKEN="${USABLE_API_TOKEN}"
-export USABLE_BASE_URL="${USABLE_URL}"
-echo "✅ USABLE_API_TOKEN exported (${USABLE_API_TOKEN:0:20}...)"
-echo "✅ USABLE_BASE_URL exported ($USABLE_BASE_URL)"
-
-echo ""
-echo "Checking for MCP server processes before ForgeCode starts..."
-ps aux | grep -i "mcp-server\|@usabledev" | grep -v grep || echo "No MCP server processes found"
+echo "Note: Using HTTP transport to ${USABLE_URL}/api/mcp"
+echo "  This avoids stdio subprocess issues in CI environments"
+echo "  Authorization is passed via env.AUTHORIZATION in .mcp.json"
 
 echo ""
 echo "Running ForgeCode with MCP test prompt..."
@@ -109,19 +98,17 @@ echo "Running ForgeCode with --verbose flag..."
 forge --verbose -p "$(cat /tmp/mcp-test-prompt.txt)" 2>&1 | tee /tmp/mcp-test-output.txt &
 FORGE_PID=$!
 
-# Wait a bit longer for MCP initialization and check for processes
+# Wait for ForgeCode to initialize and connect to HTTP MCP server
+echo "Waiting for ForgeCode to connect to HTTP MCP server..."
 sleep 5
-echo ""
-echo "Checking for MCP server processes while ForgeCode is running..."
-ps aux | grep -i "mcp-server\|@usabledev" | grep -v grep || echo "⚠️  No MCP server subprocess found!"
 
 # Check for any MCP-related patterns in the output
 echo ""
 echo "Checking for MCP-related logs in output..."
 if [ -f /tmp/mcp-test-output.txt ] && [ -s /tmp/mcp-test-output.txt ]; then
-  if grep -qi "mcp\|server\|stdio\|initialize\|spawn\|subprocess" /tmp/mcp-test-output.txt; then
+  if grep -qi "mcp\|server\|http\|initialize\|connect" /tmp/mcp-test-output.txt; then
     echo "::group::MCP-related logs found"
-    grep -i "mcp\|server\|stdio\|initialize\|spawn\|subprocess" /tmp/mcp-test-output.txt | head -50
+    grep -i "mcp\|server\|http\|initialize\|connect" /tmp/mcp-test-output.txt | head -50
     echo "::endgroup::"
   else
     echo "No MCP-related patterns found in output"
