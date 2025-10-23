@@ -33,6 +33,16 @@ else
 fi
 
 echo ""
+
+# Set ForgeCode model configuration (prevents interactive prompt)
+if [ -n "${MODEL:-}" ]; then
+  echo "Configuring ForgeCode model: ${MODEL}"
+  forge config set --model "${MODEL}" 2>&1 || echo "::warning::Could not set model config"
+else
+  echo "::warning::MODEL not set, ForgeCode may prompt for model selection"
+fi
+
+echo ""
 # Create a simple test prompt that lists available tools
 cat > /tmp/mcp-test-prompt.txt <<'EOF'
 # MCP Connection Test
