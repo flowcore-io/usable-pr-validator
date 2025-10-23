@@ -187,12 +187,12 @@ prepare_prompt() {
   local output_file="/tmp/validation-prompt.txt"
   
   # Generate compact diff summary
-  echo "Generating diff summary..."
+  echo "Generating diff summary..." >&2
   DIFF_SUMMARY=$(generate_diff_summary 2>&1)
   local summary_exit_code=$?
   
   if [ $summary_exit_code -ne 0 ]; then
-    echo "::warning::Failed to generate diff summary. Gemini will need to discover changes manually."
+    echo "::warning::Failed to generate diff summary. Gemini will need to discover changes manually." >&2
     DIFF_SUMMARY="⚠️ **Diff summary generation failed**
 
 Please use git commands to discover changes:
@@ -201,8 +201,8 @@ git diff --name-only origin/${BASE_BRANCH}...origin/${HEAD_BRANCH}
 git diff origin/${BASE_BRANCH}...origin/${HEAD_BRANCH}
 \`\`\`"
   else
-    echo "✅ Diff summary generated successfully"
-    echo "   Files in summary: $(echo "$DIFF_SUMMARY" | grep -c "^###" || echo "0")"
+    echo "✅ Diff summary generated successfully" >&2
+    echo "   Files in summary: $(echo "$DIFF_SUMMARY" | grep -c "^###" || echo "0")" >&2
   fi
   
   # Create PR context block
@@ -259,12 +259,12 @@ ${OVERRIDE_COMMENT}
   
   # Verify prompt is not empty
   if [ ! -s "$output_file" ]; then
-    echo "::error::Prompt file is empty after placeholder replacement"
-    echo "  Original file size: $(wc -c < "$prompt_file") bytes"
-    echo "  This usually means:"
-    echo "  1. Prompt template file was empty"
-    echo "  2. GitHub environment variables not set"
-    echo "  3. Placeholder replacement failed"
+    echo "::error::Prompt file is empty after placeholder replacement" >&2
+    echo "  Original file size: $(wc -c < "$prompt_file") bytes" >&2
+    echo "  This usually means:" >&2
+    echo "  1. Prompt template file was empty" >&2
+    echo "  2. GitHub environment variables not set" >&2
+    echo "  3. Placeholder replacement failed" >&2
     return 1
   fi
   
