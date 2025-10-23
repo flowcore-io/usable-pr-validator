@@ -45,7 +45,7 @@ EOF
 
 echo "✅ MCP server configured in .mcp.json"
 echo "  Type: stdio (via @usabledev/mcp-server)"
-echo "  Command: usable-mcp-server server (globally installed)"
+echo "  Command: npx @usabledev/mcp-server@latest server"
 echo "  Auth: Via USABLE_API_TOKEN environment variable"
 
 # Verify the configuration
@@ -57,8 +57,12 @@ if [ -f ".mcp.json" ]; then
   if command -v jq &> /dev/null; then
     echo ""
     echo "  Configuration preview:"
-    jq '.mcpServers | to_entries[] | {name: .key, command: .value.command, hasToken: (.value.env.USABLE_API_TOKEN != null)}' .mcp.json 2>/dev/null | sed 's/^/    /' || echo "    (Preview unavailable)"
+    jq '.mcpServers | to_entries[] | {name: .key, command: .value.command, args: .value.args, hasToken: (.value.env.USABLE_API_TOKEN != null)}' .mcp.json 2>/dev/null | sed 's/^/    /' || echo "    (Preview unavailable)"
   fi
+  
+  echo ""
+  echo "  Full .mcp.json content (with token masked):"
+  cat .mcp.json | sed "s/$USABLE_API_TOKEN/***MASKED***/g" | sed 's/^/    /' || echo "    (Could not read file)"
 else
   echo "::error::Failed to create .mcp.json"
   exit 1
