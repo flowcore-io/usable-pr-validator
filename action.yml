@@ -345,6 +345,13 @@ runs:
           forge config set --model "$MODEL" || echo "Warning: Could not set model config"
         fi
         
+        # Refresh MCP cache before validation
+        echo "🔄 Refreshing MCP cache..."
+        set +e
+        timeout 30 forge mcp cache refresh 2>&1 || echo "⚠️ MCP cache refresh timed out or failed (continuing anyway)"
+        set -e
+        echo ""
+        
         # Run ForgeCode directly with MCP stdio transport
         echo "🤖 Running ForgeCode CLI with MCP stdio transport"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
