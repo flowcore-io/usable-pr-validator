@@ -348,7 +348,16 @@ runs:
         # Refresh MCP cache before validation
         echo "🔄 Refreshing MCP cache..."
         set +e
-        timeout 30 forge mcp cache refresh 2>&1 || echo "⚠️ MCP cache refresh timed out or failed (continuing anyway)"
+        if timeout 30 forge mcp cache refresh 2>&1; then
+          echo "✅ MCP cache refreshed successfully"
+        else
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -eq 124 ]; then
+            echo "⚠️ MCP cache refresh timed out after 30 seconds (continuing anyway)"
+          else
+            echo "⚠️ MCP cache refresh failed (this is normal on first run - continuing anyway)"
+          fi
+        fi
         set -e
         echo ""
         

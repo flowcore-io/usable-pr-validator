@@ -45,7 +45,6 @@ echo "  Base URL: ${USABLE_URL}"
 # Verify the configuration
 if [ -f ".mcp.json" ]; then
   echo "  Configuration file created successfully"
-  echo "  MCP server 'usable-local' will be available to ForgeCode"
   
   # Show config (without exposing token)
   if command -v jq &> /dev/null; then
@@ -57,6 +56,16 @@ if [ -f ".mcp.json" ]; then
   echo ""
   echo "  Full .mcp.json content (with token masked):"
   cat .mcp.json | sed "s/$USABLE_API_TOKEN/***MASKED***/g" | sed 's/^/    /' || echo "    (Could not read file)"
+  
+  # Register the MCP server explicitly with ForgeCode
+  echo ""
+  echo "  Registering MCP server with ForgeCode..."
+  SERVER_CONFIG=$(jq -c '.mcpServers["usable-local"]' .mcp.json)
+  if forge mcp add-json usable-local "$SERVER_CONFIG" --scope local 2>&1; then
+    echo "  ✅ MCP server 'usable-local' registered successfully"
+  else
+    echo "  ⚠️ MCP server registration returned an error (it may already be registered from .mcp.json)"
+  fi
 else
   echo "::error::Failed to create .mcp.json"
   exit 1
