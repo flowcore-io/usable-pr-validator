@@ -81,26 +81,8 @@ echo "Checking if ForgeCode can see MCP servers in config..."
 forge mcp list 2>&1 || echo "⚠️  forge mcp list command not available or failed"
 
 echo ""
-echo "Testing MCP server startup..."
-echo "Current USABLE_API_TOKEN in shell: ${USABLE_API_TOKEN:0:20}..." # Show first 20 chars only
-
-echo ""
-echo "Attempting to start MCP server manually with explicit env vars..."
-
-# Test if the MCP server can start WITH explicit environment variables
-USABLE_API_TOKEN="$USABLE_API_TOKEN" USABLE_BASE_URL="$USABLE_URL" timeout 5s npx --yes @usabledev/mcp-server@latest server 2>&1 | head -30 &
-MCP_PID=$!
-sleep 3
-if ps -p $MCP_PID > /dev/null 2>&1; then
-  echo "✅ MCP server process started successfully (PID: $MCP_PID)"
-  kill $MCP_PID 2>/dev/null || true
-else
-  echo "::warning::MCP server process failed to start or exited quickly"
-fi
-
-echo ""
-echo "Note: If manual start works but ForgeCode doesn't see MCP tools,"
-echo "it means ForgeCode isn't properly passing env vars from .mcp.json"
+echo "Checking available tools before ForgeCode runs..."
+forge show-tools 2>&1 | head -50 || echo "⚠️  forge show-tools command failed"
 
 echo ""
 echo "Exporting environment variables for MCP server..."
@@ -122,8 +104,9 @@ echo ""
 echo "Capturing both stdout and stderr to see MCP initialization..."
 
 # Run ForgeCode with the test prompt, capturing all output including stderr
-# Also enable ForgeCode debug logging to see MCP initialization
-RUST_LOG=debug forge -p "$(cat /tmp/mcp-test-prompt.txt)" > /tmp/mcp-test-stdout.txt 2> /tmp/mcp-test-stderr.txt &
+# Use --verbose flag for detailed output
+echo "Running ForgeCode with --verbose flag..."
+forge --verbose -p "$(cat /tmp/mcp-test-prompt.txt)" 2>&1 | tee /tmp/mcp-test-output.txt &
 FORGE_PID=$!
 
 # Wait a bit longer for MCP initialization and check for processes
@@ -132,27 +115,20 @@ echo ""
 echo "Checking for MCP server processes while ForgeCode is running..."
 ps aux | grep -i "mcp-server\|@usabledev" | grep -v grep || echo "⚠️  No MCP server subprocess found!"
 
-# Check if there are any MCP-related errors in system logs
+# Check for any MCP-related patterns in the output
 echo ""
-echo "Checking forge stderr for MCP initialization logs..."
-if [ -f /tmp/mcp-test-stderr.txt ] && [ -s /tmp/mcp-test-stderr.txt ]; then
-  grep -i "mcp\|server\|stdio\|initialize" /tmp/mcp-test-stderr.txt || echo "No MCP-related logs in stderr"
+echo "Checking for MCP-related logs in output..."
+if [ -f /tmp/mcp-test-output.txt ] && [ -s /tmp/mcp-test-output.txt ]; then
+  if grep -qi "mcp\|server\|stdio\|initialize\|spawn\|subprocess" /tmp/mcp-test-output.txt; then
+    echo "::group::MCP-related logs found"
+    grep -i "mcp\|server\|stdio\|initialize\|spawn\|subprocess" /tmp/mcp-test-output.txt | head -50
+    echo "::endgroup::"
+  else
+    echo "No MCP-related patterns found in output"
+  fi
 else
-  echo "stderr file is empty or doesn't exist yet"
+  echo "Output file is empty or doesn't exist yet"
 fi
-
-echo ""
-echo "Checking for errors in stderr..."
-if [ -s /tmp/mcp-test-stderr.txt ]; then
-  echo "::group::ForgeCode stderr (may contain MCP initialization errors)"
-  cat /tmp/mcp-test-stderr.txt
-  echo "::endgroup::"
-else
-  echo "No errors in stderr"
-fi
-
-# Combine stdout and stderr for full output
-cat /tmp/mcp-test-stdout.txt /tmp/mcp-test-stderr.txt > /tmp/mcp-test-output.txt 2>&1
 
 # Wait for ForgeCode to complete
 if wait $FORGE_PID; then
@@ -174,12 +150,12 @@ fi
 echo "::endgroup::"
 
 echo ""
-echo "::group::ForgeCode Debug Logs (stderr - with RUST_LOG=debug)"
-if [ -f /tmp/mcp-test-stderr.txt ] && [ -s /tmp/mcp-test-stderr.txt ]; then
-  echo "Debug logs (first 300 lines - may show MCP initialization details):"
-  head -300 /tmp/mcp-test-stderr.txt
+echo "::group::ForgeCode Verbose Output (with --verbose flag)"
+if [ -f /tmp/mcp-test-output.txt ] && [ -s /tmp/mcp-test-output.txt ]; then
+  echo "Verbose output (first 300 lines - may show MCP initialization details):"
+  tail -n +2 /tmp/mcp-test-output.txt | head -300  # Skip first line (duplicate)
 else
-  echo "No debug logs captured"
+  echo "No verbose output captured"
 fi
 echo "::endgroup::"
 
