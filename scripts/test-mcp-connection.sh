@@ -112,16 +112,30 @@ ps aux | grep -i "mcp-server\|@usabledev" | grep -v grep || echo "No MCP server 
 echo ""
 echo "Running ForgeCode with MCP test prompt..."
 echo ""
+echo "Capturing both stdout and stderr to see MCP initialization..."
 
-# Run ForgeCode with the test prompt in background to monitor
-forge -p "$(cat /tmp/mcp-test-prompt.txt)" 2>&1 | tee /tmp/mcp-test-output.txt &
+# Run ForgeCode with the test prompt, capturing all output including stderr
+forge -p "$(cat /tmp/mcp-test-prompt.txt)" > /tmp/mcp-test-stdout.txt 2> /tmp/mcp-test-stderr.txt &
 FORGE_PID=$!
 
-# Wait a bit and check if MCP server subprocess was spawned
+# Wait a bit and check for MCP server subprocess and any errors
 sleep 2
 echo ""
 echo "Checking for MCP server processes while ForgeCode is running..."
 ps aux | grep -i "mcp-server\|@usabledev" | grep -v grep || echo "⚠️  No MCP server subprocess found!"
+
+echo ""
+echo "Checking for errors in stderr..."
+if [ -s /tmp/mcp-test-stderr.txt ]; then
+  echo "::group::ForgeCode stderr (may contain MCP initialization errors)"
+  cat /tmp/mcp-test-stderr.txt
+  echo "::endgroup::"
+else
+  echo "No errors in stderr"
+fi
+
+# Combine stdout and stderr for full output
+cat /tmp/mcp-test-stdout.txt /tmp/mcp-test-stderr.txt > /tmp/mcp-test-output.txt 2>&1
 
 # Wait for ForgeCode to complete
 if wait $FORGE_PID; then

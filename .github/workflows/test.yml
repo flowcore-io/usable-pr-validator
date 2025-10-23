@@ -237,8 +237,8 @@ jobs:
           
           if [ -f .mcp.json ]; then
             echo ""
-            echo "Full .mcp.json content (with token masked for security):"
-            cat .mcp.json | sed 's/mmesh_[a-zA-Z0-9_]*/mmesh_***MASKED***/g'
+            echo "Full .mcp.json content (with token partially masked for security):"
+            cat .mcp.json | sed -E 's/(mmesh_[a-zA-Z0-9_]{6})[a-zA-Z0-9_]*/\1***/g'
             
             echo ""
             echo "Parsed configuration:"
