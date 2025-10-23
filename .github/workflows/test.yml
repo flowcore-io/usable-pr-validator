@@ -201,11 +201,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
       - name: Install ForgeCode
         run: |
           echo "Installing ForgeCode CLI..."
           npm install -g forgecode@latest
           forge --version
+          
+          echo ""
+          echo "Node.js version:"
+          node --version
+          echo "npm version:"
+          npm --version
       
       - name: Setup MCP Server
         env:
@@ -214,6 +225,19 @@ jobs:
           WORKSPACE_ID: '60c10ca2-4115-4c1a-b6d7-04ac39fd3938'
         run: |
           ./scripts/setup-mcp.sh
+      
+      - name: Verify MCP Server Package
+        run: |
+          echo "Testing if @usabledev/mcp-server can be executed..."
+          npx --yes @usabledev/mcp-server@latest --version || echo "::warning::MCP server version check failed"
+          
+          echo ""
+          echo "Checking .mcp.json configuration..."
+          cat .mcp.json
+          
+          echo ""
+          echo "ForgeCode MCP servers:"
+          forge mcp list
       
       - name: Test MCP Connection
         env:

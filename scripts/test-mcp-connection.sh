@@ -76,6 +76,21 @@ Write your findings to `/tmp/mcp-test-result.json` in this format:
 IMPORTANT: You must write the JSON file even if no MCP tools are found.
 EOF
 
+echo "Testing MCP server startup..."
+echo "Attempting to start MCP server manually to verify it works..."
+
+# Test if the MCP server can start
+timeout 5s npx --yes @usabledev/mcp-server@latest server 2>&1 | head -20 &
+MCP_PID=$!
+sleep 2
+if ps -p $MCP_PID > /dev/null 2>&1; then
+  echo "✅ MCP server process started successfully (PID: $MCP_PID)"
+  kill $MCP_PID 2>/dev/null || true
+else
+  echo "::warning::MCP server process failed to start or exited quickly"
+fi
+
+echo ""
 echo "Running ForgeCode with MCP test prompt..."
 echo ""
 
