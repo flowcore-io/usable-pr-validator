@@ -100,6 +100,73 @@ verify_git_refs() {
   fi
 }
 
+# Generate compact diff summary with file paths and line ranges
+generate_diff_summary() {
+  local base_ref="origin/${BASE_BRANCH}"
+  local head_ref="origin/${HEAD_BRANCH}"
+  
+  # Verify refs exist before generating summary
+  if ! git rev-parse "$base_ref" >/dev/null 2>&1; then
+    echo "⚠️ **Unable to generate diff summary**: Base ref not found: $base_ref"
+    return 1
+  fi
+  
+  if ! git rev-parse "$head_ref" >/dev/null 2>&1; then
+    echo "⚠️ **Unable to generate diff summary**: Head ref not found: $head_ref"
+    return 1
+  fi
+  
+  local file_count
+  file_count=$(git diff --name-only "$base_ref...$head_ref" 2>/dev/null | wc -l | tr -d ' ')
+  
+  if [ "$file_count" -eq 0 ]; then
+    echo "ℹ️ **No files changed** in this PR"
+    return 0
+  fi
+  
+  echo "## 📋 Changed Files Summary"
+  echo ""
+  echo "**Total files changed**: $file_count"
+  echo ""
+  echo "**Instructions for Validation:**"
+  echo "1. Review the list below to understand what changed"
+  echo "2. Read specific files using: \`cat path/to/file.ts\`"
+  echo "3. Check related files when needed (imports, configs, etc.)"
+  echo "4. Focus validation on the modified line ranges shown"
+  echo ""
+  echo "---"
+  echo ""
+  
+  # Get list of changed files with their change stats
+  git diff --numstat "$base_ref...$head_ref" 2>/dev/null | while read -r additions deletions filepath; do
+    # Skip if filepath is empty
+    [ -z "$filepath" ] && continue
+    
+    echo "### \`$filepath\`"
+    
+    # Handle binary files (shown as "-" in numstat)
+    if [ "$additions" = "-" ]; then
+      echo "- **Type**: Binary file"
+    else
+      echo "- **Changes**: +${additions} lines, -${deletions} lines"
+      
+      # Get the line ranges that changed (unified diff format gives us @@ markers)
+      # -U0 means no context, just the changed lines
+      local line_ranges=$(git diff -U0 "$base_ref...$head_ref" -- "$filepath" 2>/dev/null | \
+        grep "^@@" | \
+        sed 's/@@ -[0-9,]* +\([0-9,]*\) @@.*/Line \1/' | \
+        head -10 | \
+        tr '\n' ', ' | \
+        sed 's/, $//')
+      
+      if [ -n "$line_ranges" ]; then
+        echo "- **Modified ranges**: $line_ranges"
+      fi
+    fi
+    echo ""
+  done
+}
+
 # Prepare prompt with placeholder replacement
 # 
 # Uses bash native string replacement for simplicity and safety.
@@ -118,6 +185,25 @@ prepare_prompt() {
   local prompt_file="$1"
   local output_file="/tmp/validation-prompt.txt"
   
+  # Generate compact diff summary
+  echo "Generating diff summary..."
+  DIFF_SUMMARY=$(generate_diff_summary 2>&1)
+  local summary_exit_code=$?
+  
+  if [ $summary_exit_code -ne 0 ]; then
+    echo "::warning::Failed to generate diff summary. Gemini will need to discover changes manually."
+    DIFF_SUMMARY="⚠️ **Diff summary generation failed**
+
+Please use git commands to discover changes:
+\`\`\`bash
+git diff --name-only origin/${BASE_BRANCH}...origin/${HEAD_BRANCH}
+git diff origin/${BASE_BRANCH}...origin/${HEAD_BRANCH}
+\`\`\`"
+  else
+    echo "✅ Diff summary generated successfully"
+    echo "   Files in summary: $(echo "$DIFF_SUMMARY" | grep -c "^###" || echo "0")"
+  fi
+  
   # Create PR context block
   PR_CONTEXT="**PR #${PR_NUMBER}**: ${PR_TITLE}
 
@@ -126,7 +212,11 @@ prepare_prompt() {
 **Labels**: ${PR_LABELS:-none}
 
 **Description**:
-${PR_DESCRIPTION:-No description provided}"
+${PR_DESCRIPTION:-No description provided}
+
+---
+
+${DIFF_SUMMARY}"
 
   # Add override comment if provided
   if [ -n "$OVERRIDE_COMMENT" ]; then

@@ -190,45 +190,68 @@ After documenting the deviation:
 
 1. **Understand the PR**
    - Read PR title, description, and labels
+   - Review the **Changed Files Summary** provided in the PR context
    - Identify the type of change (feature, fix, refactor, etc.)
 
-2. **Analyze Changes**
-   - Get the diff: `git --no-pager diff origin/{base_branch}...{head_branch}`
-   - Identify all changed files
-   - Understand the scope and impact
+2. **Analyze Changes** (Smart, On-Demand Approach)
 
-   **⚠️ HANDLING GIT DIFF ERRORS:**
+   **You will receive a compact summary listing:**
+   - All changed files
+   - Number of additions/deletions per file
+   - Line ranges that were modified
 
-   If you encounter git diff errors (e.g., "revisions or paths not found"), DO NOT fail immediately:
+   **Your workflow:**
 
-   - **First**: Try using the helper script: `bash scripts/get-pr-diff.sh files` (for file list)
-   - **Second**: Try alternative diff formats:
-     - Three-dot: `git --no-pager diff origin/{base}...{head}` (shows changes in head since diverging from base)
-     - Two-dot: `git --no-pager diff origin/{base}..{head}` (shows all differences between commits)
-     - Direct refs: `git --no-pager diff origin/{base} {head}`
-   - **Third**: If all diff methods fail, inform the user in your report:
+   a. **Review the summary** to understand scope and impact
 
-     ```markdown
-     ## ⚠️ Unable to Analyze Changes
+   b. **Read specific files** as needed using:
 
-     I was unable to fetch the git diff for this PR. This can happen when:
-     - The branch references are not available in the GitHub Actions environment
-     - The PR is from a fork
-     - The git setup step failed to fetch necessary refs
+      ```bash
+      # Read current state of a changed file
+      git show HEAD:path/to/file.ts
 
-     **To resolve this**, please ensure:
-     1. Both base and head branches are accessible
-     2. The action has proper permissions to fetch refs
-     3. You can manually provide the diff using: `git --no-pager diff --name-only {base}...{head}`
+      # Or read from working tree
+      cat path/to/file.ts
 
-     I cannot complete validation without the diff information.
-     ```
+      # Get specific line ranges
+      sed -n '10,50p' path/to/file.ts
+      ```
 
-   **DO NOT**:
-   - Use `web_fetch` or similar tools to try to download diffs from URLs
-   - Make up or assume what files were changed
-   - Proceed with validation if you cannot verify the actual changes
-   - Report violations in files you cannot confirm were changed
+   c. **Check dependencies** when needed:
+
+      ```bash
+      # If a file imports from another file, read that too
+      cat src/lib/services/user.service.ts
+
+      # Check related configuration
+      cat flowcore.yml
+      ```
+
+   d. **Focus on changed areas** - use the line ranges from the summary to know where to look
+
+   **⚠️ IMPORTANT: You do NOT need to run `git diff`**
+
+   The summary already tells you what changed. Your job is to:
+   - ✅ **Read the current state** of files that changed
+   - ✅ **Focus on the modified line ranges** mentioned in the summary
+   - ✅ **Check related files** when you need context
+   - ❌ **Do NOT try to run `git diff`** - you already have the change list
+
+   **Example workflow:**
+
+   ```text
+   Summary shows: src/app/api/users/route.ts changed (lines 10-25)
+
+   1. Read the file: cat src/app/api/users/route.ts
+   2. Focus on lines 10-25 (that's what changed)
+   3. Check if it imports a service: cat src/lib/services/user.service.ts
+   4. Validate against standards
+   ```
+
+   **If you cannot read the files:**
+   - Report which files you tried to access
+   - Explain what you were trying to validate
+   - Mark the validation as incomplete
 
 3. **Validate Against Standards**
    - Use the knowledge base to find relevant standards

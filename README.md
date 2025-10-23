@@ -152,6 +152,57 @@ This three-layer approach ensures:
 - ✅ Accurate, hallucination-free reports
 - ✅ Flexibility for repo-specific rules
 
+### 📋 Smart Diff Summary (Efficient Validation)
+
+The action provides Gemini with a **compact summary** of changed files rather than dumping massive diffs into the prompt. This makes validation more reliable, scalable, and cost-effective.
+
+**What Gemini Receives:**
+
+```markdown
+## 📋 Changed Files Summary
+
+**Total files changed**: 15
+
+### `src/app/api/users/route.ts`
+- **Changes**: +45 lines, -12 lines
+- **Modified ranges**: Line 10-25, Line 45-67, Line 89-102
+
+### `src/lib/services/user.service.ts`
+- **Changes**: +23 lines, -8 lines
+- **Modified ranges**: Line 15-30, Line 55-61
+```
+
+**How Gemini Uses It:**
+
+1. **Reviews the summary** to understand scope and which files changed
+2. **Reads specific files** on-demand using `cat` or `git show HEAD:path/to/file.ts`
+3. **Focuses on modified line ranges** mentioned in the summary
+4. **Checks dependencies** when needed (imports, configs, related files)
+5. **Validates intelligently** without needing to process full diffs
+
+**Benefits:**
+
+- ✅ **Scalable**: Works with PRs of any size (even 100+ files)
+- ✅ **Reliable**: Gemini doesn't need to run `git diff` (which can fail)
+- ✅ **Efficient**: Reads only what it needs, not entire file contents upfront
+- ✅ **Cost-effective**: Smaller prompt sizes = lower API costs
+- ✅ **Intelligent**: Agentic approach lets Gemini decide what to fetch
+
+**Example Validation Flow:**
+
+```text
+Summary shows: src/app/api/subscription/route.ts changed (lines 10-25)
+
+Gemini's approach:
+1. cat src/app/api/subscription/route.ts          # Read the changed file
+2. Focus on lines 10-25                            # That's what changed
+3. cat src/lib/services/subscription.service.ts   # Check the imported service
+4. grep "subscription-updated" flowcore.yml       # Verify event type exists
+5. Report any violations found
+```
+
+This agent-driven approach is more robust than trying to inject massive git diffs into the prompt, especially for large PRs where diffs can exceed token limits.
+
 ### 🚀 Dynamic Prompts
 
 Instead of maintaining static prompt files, you can now fetch prompts dynamically from your Usable workspace. This ensures you're always using the latest validation standards without manual updates.
