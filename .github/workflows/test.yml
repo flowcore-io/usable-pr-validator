@@ -233,7 +233,27 @@ jobs:
           
           echo ""
           echo "Checking .mcp.json configuration..."
-          cat .mcp.json
+          echo "File exists: $([ -f .mcp.json ] && echo 'YES' || echo 'NO')"
+          
+          if [ -f .mcp.json ]; then
+            echo ""
+            echo "Full .mcp.json content (with token masked for security):"
+            cat .mcp.json | sed 's/mmesh_[a-zA-Z0-9_]*/mmesh_***MASKED***/g'
+            
+            echo ""
+            echo "Parsed configuration:"
+            jq '.' .mcp.json 2>&1 || echo "::warning::Failed to parse JSON"
+            
+            echo ""
+            echo "Command that will be executed:"
+            jq -r '.mcpServers.usable.command + " " + (.mcpServers.usable.args | join(" "))' .mcp.json 2>&1 || echo "::warning::Failed to extract command"
+            
+            echo ""
+            echo "Environment variables configured in .mcp.json:"
+            jq -r '.mcpServers.usable.env | keys[]' .mcp.json 2>&1 || echo "::warning::Failed to extract env vars"
+          else
+            echo "::error::.mcp.json file not found!"
+          fi
           
           echo ""
           echo "ForgeCode MCP servers:"
