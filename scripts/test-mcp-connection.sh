@@ -98,6 +98,14 @@ echo "Note: If manual start works but ForgeCode doesn't see MCP tools,"
 echo "it means ForgeCode isn't properly passing env vars from .mcp.json"
 
 echo ""
+echo "Exporting environment variables for MCP server..."
+# ForgeCode doesn't pass env vars from .mcp.json, so we export them globally
+export USABLE_API_TOKEN="${USABLE_API_TOKEN}"
+export USABLE_BASE_URL="${USABLE_URL}"
+echo "✅ USABLE_API_TOKEN exported (${USABLE_API_TOKEN:0:20}...)"
+echo "✅ USABLE_BASE_URL exported ($USABLE_BASE_URL)"
+
+echo ""
 echo "Running ForgeCode with MCP test prompt..."
 echo ""
 
