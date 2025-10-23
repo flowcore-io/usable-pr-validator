@@ -15,22 +15,21 @@ USABLE_URL="${USABLE_URL:-https://usable.dev}"
 
 echo "Usable URL: $USABLE_URL"
 
-# Write .mcp.json file with HTTP transport (more reliable in CI than stdio)
+# Write .mcp.json file with streaming HTTP transport (more reliable in CI than stdio)
 # ForgeCode loads MCP servers from .mcp.json in the current directory
 echo ""
 echo "Writing .mcp.json configuration..."
 
-# Create the .mcp.json file with HTTP transport to Usable's MCP endpoint
+# Create the .mcp.json file with streaming HTTP transport to Usable's MCP endpoint
 # This avoids stdio buffering issues in GitHub Actions CI
+# Using env.AUTHORIZATION format instead of headers for better compatibility
 cat > .mcp.json <<EOF
 {
   "mcpServers": {
     "usable": {
       "url": "${USABLE_URL}/api/mcp",
-      "transport": "http",
-      "headers": {
-        "Authorization": "Bearer ${USABLE_API_TOKEN}",
-        "Content-Type": "application/json"
+      "env": {
+        "AUTHORIZATION": "Bearer ${USABLE_API_TOKEN}"
       }
     }
   }
@@ -38,9 +37,9 @@ cat > .mcp.json <<EOF
 EOF
 
 echo "✅ MCP server configured in .mcp.json"
-echo "  Type: HTTP transport (avoids stdio issues in CI)"
+echo "  Type: Streaming HTTP transport (avoids stdio issues in CI)"
 echo "  URL: ${USABLE_URL}/api/mcp"
-echo "  Auth: Via Authorization header"
+echo "  Auth: Via AUTHORIZATION environment variable"
 
 # Verify the configuration
 if [ -f ".mcp.json" ]; then
@@ -51,7 +50,7 @@ if [ -f ".mcp.json" ]; then
   if command -v jq &> /dev/null; then
     echo ""
     echo "  Configuration preview:"
-    jq '.mcpServers | to_entries[] | {name: .key, transport: .value.transport, url: .value.url, hasAuth: (.value.headers.Authorization != null)}' .mcp.json 2>/dev/null | sed 's/^/    /' || echo "    (Preview unavailable)"
+    jq '.mcpServers | to_entries[] | {name: .key, url: .value.url, hasAuth: (.value.env.AUTHORIZATION != null)}' .mcp.json 2>/dev/null | sed 's/^/    /' || echo "    (Preview unavailable)"
   fi
   
   echo ""
