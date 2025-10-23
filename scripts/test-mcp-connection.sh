@@ -86,17 +86,20 @@ forge mcp list 2>&1 || echo "⚠️  forge mcp list command not available or fai
 echo ""
 echo "🔄 Refreshing MCP cache..."
 set +e
-if timeout 30 forge mcp cache refresh 2>&1; then
-  echo "✅ MCP cache refreshed successfully"
-else
-  EXIT_CODE=$?
-  if [ $EXIT_CODE -eq 124 ]; then
-    echo "⚠️ MCP cache refresh timed out after 30 seconds (continuing anyway)"
-  else
-    echo "⚠️ MCP cache refresh failed (this is normal on first run - continuing anyway)"
-  fi
-fi
+CACHE_OUTPUT=$(timeout 30 forge mcp cache refresh 2>&1)
+CACHE_EXIT=$?
 set -e
+
+if [ $CACHE_EXIT -eq 0 ]; then
+  echo "✅ MCP cache refreshed successfully"
+elif [ $CACHE_EXIT -eq 124 ]; then
+  echo "⚠️ MCP cache refresh timed out after 30 seconds (continuing anyway)"
+elif echo "$CACHE_OUTPUT" | grep -q "No such file or directory"; then
+  echo "⚠️ No cache directory exists yet (first run) - skipping cache refresh"
+else
+  echo "⚠️ MCP cache refresh failed - continuing anyway"
+  echo "   Error: $(echo "$CACHE_OUTPUT" | grep -i "error" | head -1)"
+fi
 
 echo ""
 echo "Note: Using stdio transport via npx @usabledev/mcp-server"
