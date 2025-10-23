@@ -242,6 +242,8 @@ jobs:
       - name: Test MCP Connection
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+          USABLE_URL: ${{ vars.USABLE_URL || 'https://usable.dev' }}
           PROVIDER: ${{ vars.PROVIDER || 'auto' }}
           MODEL: ${{ vars.MODEL || 'anthropic/claude-haiku-4.5' }}
         run: |

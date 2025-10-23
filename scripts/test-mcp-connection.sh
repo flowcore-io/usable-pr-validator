@@ -77,18 +77,25 @@ IMPORTANT: You must write the JSON file even if no MCP tools are found.
 EOF
 
 echo "Testing MCP server startup..."
-echo "Attempting to start MCP server manually to verify it works..."
+echo "Current USABLE_API_TOKEN in shell: ${USABLE_API_TOKEN:0:20}..." # Show first 20 chars only
 
-# Test if the MCP server can start
-timeout 5s npx --yes @usabledev/mcp-server@latest server 2>&1 | head -20 &
+echo ""
+echo "Attempting to start MCP server manually with explicit env vars..."
+
+# Test if the MCP server can start WITH explicit environment variables
+USABLE_API_TOKEN="$USABLE_API_TOKEN" USABLE_BASE_URL="$USABLE_URL" timeout 5s npx --yes @usabledev/mcp-server@latest server 2>&1 | head -30 &
 MCP_PID=$!
-sleep 2
+sleep 3
 if ps -p $MCP_PID > /dev/null 2>&1; then
   echo "✅ MCP server process started successfully (PID: $MCP_PID)"
   kill $MCP_PID 2>/dev/null || true
 else
   echo "::warning::MCP server process failed to start or exited quickly"
 fi
+
+echo ""
+echo "Note: If manual start works but ForgeCode doesn't see MCP tools,"
+echo "it means ForgeCode isn't properly passing env vars from .mcp.json"
 
 echo ""
 echo "Running ForgeCode with MCP test prompt..."
