@@ -106,11 +106,25 @@ echo "✅ USABLE_API_TOKEN exported (${USABLE_API_TOKEN:0:20}...)"
 echo "✅ USABLE_BASE_URL exported ($USABLE_BASE_URL)"
 
 echo ""
+echo "Checking for MCP server processes before ForgeCode starts..."
+ps aux | grep -i "mcp-server\|@usabledev" | grep -v grep || echo "No MCP server processes found"
+
+echo ""
 echo "Running ForgeCode with MCP test prompt..."
 echo ""
 
-# Run ForgeCode with the test prompt
-if forge -p "$(cat /tmp/mcp-test-prompt.txt)" 2>&1 | tee /tmp/mcp-test-output.txt; then
+# Run ForgeCode with the test prompt in background to monitor
+forge -p "$(cat /tmp/mcp-test-prompt.txt)" 2>&1 | tee /tmp/mcp-test-output.txt &
+FORGE_PID=$!
+
+# Wait a bit and check if MCP server subprocess was spawned
+sleep 2
+echo ""
+echo "Checking for MCP server processes while ForgeCode is running..."
+ps aux | grep -i "mcp-server\|@usabledev" | grep -v grep || echo "⚠️  No MCP server subprocess found!"
+
+# Wait for ForgeCode to complete
+if wait $FORGE_PID; then
   echo ""
   echo "ForgeCode execution completed"
 else
