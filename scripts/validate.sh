@@ -220,6 +220,7 @@ ${PR_DESCRIPTION:-No description provided}
 ${DIFF_SUMMARY}"
 
   # Add override comment if provided
+  OVERRIDE_COMMENT="${OVERRIDE_COMMENT:-}"
   if [ -n "$OVERRIDE_COMMENT" ]; then
     PR_CONTEXT="${PR_CONTEXT}
 
@@ -277,7 +278,7 @@ run_gemini() {
   local retry_count=0
   local max_retries="${MAX_RETRIES:-2}"
   
-  while [ $retry_count -le $max_retries ]; do
+  while [ $retry_count -le "$max_retries" ]; do
     echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running Gemini validation..."
     
     # Debug: Check prompt file
@@ -331,7 +332,7 @@ run_gemini() {
       if [ "$is_retryable" = true ]; then
         retry_count=$((retry_count + 1))
         
-        if [ $retry_count -le $max_retries ]; then
+        if [ $retry_count -le "$max_retries" ]; then
           wait_time=$((2 ** retry_count))
           echo "⏳ Rate limit or timeout detected. Retrying after ${wait_time} seconds..."
           sleep $wait_time
@@ -433,19 +434,23 @@ parse_results() {
   fi
   
   # Write outputs using heredoc delimiter (multiline-safe, prevents injection)
-  {
-    echo "validation_status<<EOF"
-    echo "$validation_status"
-    echo "EOF"
-    echo "validation_passed<<EOF"
-    echo "$validation_passed"
-    echo "EOF"
-    echo "critical_issues<<EOF"
-    echo "$critical_issues"
-    echo "EOF"
-  } >> "$GITHUB_OUTPUT"
-  
-  echo "✅ Outputs written successfully"
+  if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    {
+      echo "validation_status<<EOF"
+      echo "$validation_status"
+      echo "EOF"
+      echo "validation_passed<<EOF"
+      echo "$validation_passed"
+      echo "EOF"
+      echo "critical_issues<<EOF"
+      echo "$critical_issues"
+      echo "EOF"
+    } >> "$GITHUB_OUTPUT"
+    
+    echo "✅ Outputs written successfully"
+  else
+    echo "✅ Outputs captured (local mode, no GITHUB_OUTPUT)"
+  fi
   
   # Export for display
   echo "$validation_status|$validation_passed|$critical_issues"
@@ -487,19 +492,23 @@ main() {
     echo "::error::Validation execution failed"
     
     # Set failed outputs using heredoc delimiter
-    {
-      echo "validation_status<<EOF"
-      echo "error"
-      echo "EOF"
-      echo "validation_passed<<EOF"
-      echo "false"
-      echo "EOF"
-      echo "critical_issues<<EOF"
-      echo "0"
-      echo "EOF"
-    } >> "$GITHUB_OUTPUT"
-    
-    echo "❌ Outputs set to error state"
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+      {
+        echo "validation_status<<EOF"
+        echo "error"
+        echo "EOF"
+        echo "validation_passed<<EOF"
+        echo "false"
+        echo "EOF"
+        echo "critical_issues<<EOF"
+        echo "0"
+        echo "EOF"
+      } >> "$GITHUB_OUTPUT"
+      
+      echo "❌ Outputs set to error state"
+    else
+      echo "❌ Validation failed (local mode, no GITHUB_OUTPUT)"
+    fi
     exit 1
   fi
   
@@ -546,19 +555,23 @@ main() {
     echo "::error::Report file not generated"
     
     # Set error outputs using heredoc delimiter
-    {
-      echo "validation_status<<EOF"
-      echo "error"
-      echo "EOF"
-      echo "validation_passed<<EOF"
-      echo "false"
-      echo "EOF"
-      echo "critical_issues<<EOF"
-      echo "0"
-      echo "EOF"
-    } >> "$GITHUB_OUTPUT"
-    
-    echo "❌ Outputs set to error state (no report)"
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+      {
+        echo "validation_status<<EOF"
+        echo "error"
+        echo "EOF"
+        echo "validation_passed<<EOF"
+        echo "false"
+        echo "EOF"
+        echo "critical_issues<<EOF"
+        echo "0"
+        echo "EOF"
+      } >> "$GITHUB_OUTPUT"
+      
+      echo "❌ Outputs set to error state (no report)"
+    else
+      echo "❌ No report generated (local mode, no GITHUB_OUTPUT)"
+    fi
     exit 1
   fi
   

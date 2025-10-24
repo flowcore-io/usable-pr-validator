@@ -51,9 +51,7 @@ fetch_fragment_content() {
   # Use jq to parse JSON and extract content field
   # Note: jq is pre-installed on GitHub Actions runners
   local content
-  content=$(echo "$body" | jq -r '.content // empty' 2>&1)
-  
-  if [ $? -ne 0 ]; then
+  if ! content=$(echo "$body" | jq -r '.content // empty' 2>&1); then
     echo "::error::Failed to parse fragment JSON response"
     echo "Error: $content"
     return 1
@@ -169,6 +167,9 @@ main() {
     fi
   else
     # Static prompt file
+    # Use CUSTOM_PROMPT_FILE (set by action.yml) or fall back to PROMPT_FILE (for local testing)
+    CUSTOM_PROMPT_FILE="${CUSTOM_PROMPT_FILE:-${PROMPT_FILE:-}}"
+    
     if [ -n "$CUSTOM_PROMPT_FILE" ] && [ -f "$CUSTOM_PROMPT_FILE" ]; then
       echo "Using static prompt file: $CUSTOM_PROMPT_FILE"
       cp "$CUSTOM_PROMPT_FILE" "$USER_PROMPT_FILE"
@@ -177,6 +178,9 @@ main() {
       echo "Size: $(wc -c < "$USER_PROMPT_FILE") bytes"
     else
       echo "::error::No user prompt file provided or file not found"
+      echo "  CUSTOM_PROMPT_FILE: ${CUSTOM_PROMPT_FILE:-not set}"
+      echo "  PROMPT_FILE: ${PROMPT_FILE:-not set}"
+      echo "  File exists: $([ -f "${CUSTOM_PROMPT_FILE:-}" ] && echo "yes" || echo "no")"
       exit 1
     fi
   fi
