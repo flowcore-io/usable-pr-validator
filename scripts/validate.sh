@@ -278,7 +278,7 @@ run_gemini() {
   local retry_count=0
   local max_retries="${MAX_RETRIES:-2}"
   
-  while [ $retry_count -le $max_retries ]; do
+  while [ $retry_count -le "$max_retries" ]; do
     echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running Gemini validation..."
     
     # Debug: Check prompt file
@@ -332,7 +332,7 @@ run_gemini() {
       if [ "$is_retryable" = true ]; then
         retry_count=$((retry_count + 1))
         
-        if [ $retry_count -le $max_retries ]; then
+        if [ $retry_count -le "$max_retries" ]; then
           wait_time=$((2 ** retry_count))
           echo "⏳ Rate limit or timeout detected. Retrying after ${wait_time} seconds..."
           sleep $wait_time

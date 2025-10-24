@@ -45,7 +45,7 @@ export GEMINI_SETTINGS="/tmp/gemini-settings.json"
 
 # Write to GITHUB_ENV for subsequent steps (if in GitHub Actions)
 if [ -n "${GITHUB_ENV:-}" ]; then
-  echo "GEMINI_SETTINGS=/tmp/gemini-settings.json" >> $GITHUB_ENV
+  echo "GEMINI_SETTINGS=/tmp/gemini-settings.json" >> "$GITHUB_ENV"
 fi
 
 echo "✅ MCP server configured"

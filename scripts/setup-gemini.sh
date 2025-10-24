@@ -55,10 +55,12 @@ export GOOGLE_CLOUD_LOCATION="${GOOGLE_CLOUD_LOCATION:-us-central1}"
 
 # Write to GITHUB_ENV for subsequent steps (if in GitHub Actions)
 if [ -n "${GITHUB_ENV:-}" ]; then
-  echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/service-account.json" >> $GITHUB_ENV
-  echo "GOOGLE_GENAI_USE_VERTEXAI=true" >> $GITHUB_ENV
-  echo "GOOGLE_CLOUD_PROJECT=$PROJECT_ID" >> $GITHUB_ENV
-  echo "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION}" >> $GITHUB_ENV
+  {
+    echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/service-account.json"
+    echo "GOOGLE_GENAI_USE_VERTEXAI=true"
+    echo "GOOGLE_CLOUD_PROJECT=$PROJECT_ID"
+    echo "GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION}"
+  } >> "$GITHUB_ENV"
 fi
 
 echo "✅ Gemini authentication configured"

@@ -88,7 +88,8 @@ echo "✅ Gemini CLI: $(gemini --version 2>/dev/null || echo 'installed')"
 echo ""
 
 # Get action path (current directory)
-export ACTION_PATH="$(pwd)"
+ACTION_PATH="$(pwd)"
+export ACTION_PATH
 
 # Run setup scripts (source them to preserve environment variables)
 echo "🔧 Setting up authentication..."

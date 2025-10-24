@@ -51,9 +51,7 @@ fetch_fragment_content() {
   # Use jq to parse JSON and extract content field
   # Note: jq is pre-installed on GitHub Actions runners
   local content
-  content=$(echo "$body" | jq -r '.content // empty' 2>&1)
-  
-  if [ $? -ne 0 ]; then
+  if ! content=$(echo "$body" | jq -r '.content // empty' 2>&1); then
     echo "::error::Failed to parse fragment JSON response"
     echo "Error: $content"
     return 1
