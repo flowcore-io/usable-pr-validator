@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0](https://github.com/flowcore-io/usable-pr-validator/compare/v1.5.2...v1.6.0) (2025-10-24)
+
+
+### Features
+
+* **validation:** :sparkles: smart diff summary for scalable PR validation ([473e73b](https://github.com/flowcore-io/usable-pr-validator/commit/473e73b8ba2d60344f818262e1851cced11cb5ec))
+* **validation:** add PR validation prompt for Next.js standards ([350b533](https://github.com/flowcore-io/usable-pr-validator/commit/350b53342d2cf42d92bc71bc08328c49b8518905))
+* **validation:** add PR validation prompt for Next.js standards ([366afe4](https://github.com/flowcore-io/usable-pr-validator/commit/366afe4dac6c8388de70ab3b8d7c154cf586dc60))
+
+
+### Bug Fixes
+
+* **fetch-prompt:** improve handling of custom prompt file fallback ([99c6661](https://github.com/flowcore-io/usable-pr-validator/commit/99c66615d503626defaa623a817b7f2739f302c4))
+* **scripts:** improve error handling and environment variable exports ([783f9f8](https://github.com/flowcore-io/usable-pr-validator/commit/783f9f82d7bacb5e901a34ccb4c510c2e1437438))
+* **validation:** :bug: redirect status messages to stderr in prepare_prompt ([bbbf39c](https://github.com/flowcore-io/usable-pr-validator/commit/bbbf39cd4e9b5b79d2805d79faf2e20767bc04cf))
+* **validation:** :bug: separate local declaration and assignment (SC2155) ([e9414bf](https://github.com/flowcore-io/usable-pr-validator/commit/e9414bf380113170b9b24ae66e9a62da6b676582))
+
 ## [1.5.2](https://github.com/flowcore-io/usable-pr-validator/compare/v1.5.1...v1.5.2) (2025-10-13)
 
 
