@@ -169,7 +169,9 @@ main() {
     fi
   else
     # Static prompt file
-    CUSTOM_PROMPT_FILE="${PROMPT_FILE:-}"
+    # Use CUSTOM_PROMPT_FILE (set by action.yml) or fall back to PROMPT_FILE (for local testing)
+    CUSTOM_PROMPT_FILE="${CUSTOM_PROMPT_FILE:-${PROMPT_FILE:-}}"
+    
     if [ -n "$CUSTOM_PROMPT_FILE" ] && [ -f "$CUSTOM_PROMPT_FILE" ]; then
       echo "Using static prompt file: $CUSTOM_PROMPT_FILE"
       cp "$CUSTOM_PROMPT_FILE" "$USER_PROMPT_FILE"
@@ -178,8 +180,9 @@ main() {
       echo "Size: $(wc -c < "$USER_PROMPT_FILE") bytes"
     else
       echo "::error::No user prompt file provided or file not found"
+      echo "  CUSTOM_PROMPT_FILE: ${CUSTOM_PROMPT_FILE:-not set}"
       echo "  PROMPT_FILE: ${PROMPT_FILE:-not set}"
-      echo "  File exists: $([ -f "${PROMPT_FILE:-}" ] && echo "yes" || echo "no")"
+      echo "  File exists: $([ -f "${CUSTOM_PROMPT_FILE:-}" ] && echo "yes" || echo "no")"
       exit 1
     fi
   fi
