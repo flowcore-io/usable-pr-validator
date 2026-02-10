@@ -191,6 +191,11 @@ jobs:
             echo "::error::Missing cleanup for gemini-settings.json"
             exit 1
           fi
+
+          if ! grep -q "rm -f /tmp/opencode.json" action.yml; then
+            echo "::error::Missing cleanup for opencode.json"
+            exit 1
+          fi
           
           echo "✅ Cleanup steps verified"
 
@@ -312,7 +317,9 @@ jobs:
           comment-title: 'Integration Test Validation'
           comment-mode: 'update'
           fail-on-critical: false
+          provider: 'opencode'
         env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
       
@@ -321,7 +328,7 @@ jobs:
         run: |
           echo "Test result: ${{ steps.test-action.outcome }}"
           if [ -f "/tmp/validation-full-output.md" ]; then
-            echo "::group::Full Gemini Output"
+            echo "::group::Full AI Output"
             cat /tmp/validation-full-output.md
             echo "::endgroup::"
           else
@@ -429,7 +436,9 @@ jobs:
           comment-title: 'Documentation Validation'
           comment-mode: 'update'
           fail-on-critical: false
+          provider: 'opencode'
         env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
       
@@ -438,7 +447,7 @@ jobs:
         run: |
           echo "Docs test result: ${{ steps.docs-action.outcome }}"
           if [ -f "/tmp/validation-full-output.md" ]; then
-            echo "::group::Full Gemini Output"
+            echo "::group::Full AI Output"
             cat /tmp/validation-full-output.md
             echo "::endgroup::"
           else
@@ -568,7 +577,9 @@ jobs:
           comment-title: 'Comment Revalidation Test'
           comment-mode: 'update'
           fail-on-critical: false
+          provider: 'opencode'
         env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
           COMMENT_AUTHOR: 'test-user'

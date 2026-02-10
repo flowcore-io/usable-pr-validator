@@ -1,5 +1,5 @@
 name: 'Usable PR Validator'
-description: 'Validate Pull Requests against your Usable knowledge base standards using Google Gemini AI and Usable MCP integration'
+description: 'Validate Pull Requests against your Usable knowledge base standards using AI (OpenCode/OpenRouter or Google Gemini) and Usable MCP integration'
 author: 'Flowcore'
 
 branding:
@@ -82,6 +82,18 @@ inputs:
     description: 'Allow AI to use web_fetch tool for external resources (security consideration)'
     required: false
     default: 'false'
+  provider:
+    description: 'AI provider to use (opencode or gemini)'
+    required: false
+    default: 'opencode'
+  openrouter-model:
+    description: 'OpenRouter model ID when provider is opencode (e.g., moonshotai/kimi-k2.5)'
+    required: false
+    default: 'moonshotai/kimi-k2.5'
+  openrouter-api-key-secret:
+    description: 'Name of secret containing OpenRouter API key (when provider is opencode)'
+    required: false
+    default: 'OPENROUTER_API_KEY'
 
 outputs:
   validation-status:
@@ -144,8 +156,15 @@ runs:
           echo "::error::Invalid allow-web-fetch. Must be: true or false"
           exit 1
         fi
-        
+
+        # Validate provider
+        if [[ ! "${{ inputs.provider }}" =~ ^(opencode|gemini)$ ]]; then
+          echo "::error::Invalid provider. Must be: opencode or gemini"
+          exit 1
+        fi
+
         echo "✅ All inputs validated successfully"
+        echo "  Provider: ${{ inputs.provider }}"
         echo "::endgroup::"
     
     - name: Set Artifact Name
@@ -165,13 +184,22 @@ runs:
         node-version: '20'
     
     - name: Install Gemini CLI
+      if: inputs.provider == 'gemini'
       shell: bash
       run: |
         echo "::group::Installing Gemini CLI"
         npm install -g @google/gemini-cli@0.7.0
         echo "✅ Gemini CLI installed"
         echo "::endgroup::"
-    
+
+    - name: Install OpenCode CLI
+      if: inputs.provider == 'opencode'
+      shell: bash
+      env:
+        OPENROUTER_SECRET_NAME: ${{ inputs.openrouter-api-key-secret }}
+      run: |
+        ${{ github.action_path }}/scripts/setup-opencode.sh
+
     - name: Setup Git
       shell: bash
       env:
@@ -277,18 +305,21 @@ runs:
         echo "::endgroup::"
     
     - name: Setup Gemini Authentication
+      if: inputs.provider == 'gemini'
       shell: bash
       env:
         SECRET_NAME: ${{ inputs.service-account-key-secret }}
       run: |
         ${{ github.action_path }}/scripts/setup-gemini.sh
-    
+
     - name: Setup MCP Server
       shell: bash
       env:
         MCP_URL: ${{ inputs.mcp-server-url }}
         MCP_SECRET_NAME: ${{ inputs.mcp-token-secret }}
         WORKSPACE_ID: ${{ inputs.workspace-id }}
+        PROVIDER: ${{ inputs.provider }}
+        OPENROUTER_MODEL: ${{ inputs.openrouter-model }}
       run: |
         ${{ github.action_path }}/scripts/setup-mcp.sh
     
@@ -311,7 +342,9 @@ runs:
       env:
         PROMPT_FILE: ${{ inputs.prompt-file }}
         USE_DYNAMIC_PROMPTS: ${{ inputs.use-dynamic-prompts }}
+        PROVIDER: ${{ inputs.provider }}
         GEMINI_MODEL: ${{ inputs.gemini-model }}
+        OPENROUTER_MODEL: ${{ inputs.openrouter-model }}
         MAX_RETRIES: ${{ inputs.max-retries }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         PR_TITLE: ${{ github.event.pull_request.title }}
@@ -349,9 +382,14 @@ runs:
           const markerId = commentTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
           const marker = `<!-- usable-pr-validator:${markerId} -->`;
           
-          const commentBody = marker + '\n## 🤖 ' + commentTitle + '\n\n' + 
+          const provider = '${{ inputs.provider }}';
+          const modelInfo = provider === 'opencode'
+            ? 'OpenRouter ${{ inputs.openrouter-model }}'
+            : 'Google Gemini ${{ inputs.gemini-model }}';
+
+          const commentBody = marker + '\n## 🤖 ' + commentTitle + '\n\n' +
             report + '\n\n---\n<details>\n<summary>📊 Validation Statistics</summary>\n\n' +
-            '- **Model**: Google Gemini ${{ inputs.gemini-model }}\n' +
+            '- **Model**: ' + modelInfo + '\n' +
             '- **Standards Source**: ${{ inputs.mcp-server-url }}\n' +
             '- **Commit**: ' + context.payload.pull_request.head.sha.substring(0, 7) + '\n' +
             '- **Triggered by**: @' + context.actor + '\n\n' +
@@ -411,6 +449,8 @@ runs:
         rm -f /tmp/service-account.json
         rm -f /tmp/gemini-settings.json
         rm -f /tmp/gemini-stderr.log
+        rm -f /tmp/opencode.json
+        rm -f ./opencode.json
         echo "✅ Temporary files cleaned up"
     
     - name: Fail on Critical Violations

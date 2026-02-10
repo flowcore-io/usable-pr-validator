@@ -25,11 +25,21 @@ on:
         required: false
         type: string
         default: ''
+      provider:
+        description: 'AI provider to use (opencode or gemini)'
+        required: false
+        type: string
+        default: 'opencode'
       gemini-model:
-        description: 'Gemini model to use'
+        description: 'Gemini model to use (when provider is gemini)'
         required: false
         type: string
         default: 'gemini-2.5-flash'
+      openrouter-model:
+        description: 'OpenRouter model ID (when provider is opencode)'
+        required: false
+        type: string
+        default: 'moonshotai/kimi-k2.5'
       comment-title:
         description: 'Title for the validation comment'
         required: false
@@ -42,8 +52,11 @@ on:
         default: false
     secrets:
       GEMINI_SERVICE_ACCOUNT_KEY:
-        description: 'Base64-encoded Gemini service account key'
-        required: true
+        description: 'Base64-encoded Gemini service account key (required when provider is gemini)'
+        required: false
+      OPENROUTER_API_KEY:
+        description: 'OpenRouter API key (required when provider is opencode)'
+        required: false
       USABLE_API_TOKEN:
         description: 'Usable API token'
         required: true
@@ -273,13 +286,16 @@ jobs:
           prompt-fragment-id: ${{ inputs.prompt-fragment-id || '' }}
           workspace-id: ${{ inputs.workspace-id || '60c10ca2-4115-4c1a-b6d7-04ac39fd3938' }}
           base-ref: ${{ steps.base-ref.outputs.base-ref }}
+          provider: ${{ inputs.provider || 'opencode' }}
           gemini-model: ${{ inputs.gemini-model || 'gemini-2.5-flash' }}
+          openrouter-model: ${{ inputs.openrouter-model || 'moonshotai/kimi-k2.5' }}
           comment-title: ${{ inputs.comment-title || '🔄 Revalidation (Comment Triggered)' }}
           comment-mode: 'create'
           fail-on-critical: ${{ inputs.fail-on-critical || false }}
           override-comment: ${{ needs.check-trigger.outputs.comment-body }}
         env:
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
           COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
       
