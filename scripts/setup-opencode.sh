@@ -19,16 +19,24 @@ echo "Installing OpenCode CLI..."
 if ! command -v opencode &> /dev/null; then
   curl -fsSL https://raw.githubusercontent.com/opencode-ai/opencode/refs/heads/main/install | bash
 
-  # Add to PATH if installed to a non-standard location
-  if [ -f "$HOME/.local/bin/opencode" ]; then
-    export PATH="$HOME/.local/bin:$PATH"
-    if [ -n "${GITHUB_PATH:-}" ]; then
-      echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+  # The installer puts opencode in ~/.opencode/bin and updates .bashrc,
+  # but PATH changes from .bashrc don't apply to the current shell.
+  # Add known install locations to PATH for this session.
+  for dir in "$HOME/.opencode/bin" "$HOME/.local/bin"; do
+    if [ -f "$dir/opencode" ]; then
+      export PATH="$dir:$PATH"
+      # Also ensure subsequent steps have it (installer may already do this for GITHUB_PATH)
+      if [ -n "${GITHUB_PATH:-}" ]; then
+        echo "$dir" >> "$GITHUB_PATH"
+      fi
+      break
     fi
-  fi
+  done
 
   if ! command -v opencode &> /dev/null; then
     echo "::error::OpenCode CLI installation failed - command not found after install"
+    echo "Searched: ~/.opencode/bin, ~/.local/bin"
+    echo "PATH: $PATH"
     exit 1
   fi
 fi
