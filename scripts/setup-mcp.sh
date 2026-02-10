@@ -6,7 +6,7 @@ echo "::group::Setting up MCP Server Integration"
 # Set defaults for local testing
 MCP_SECRET_NAME="${MCP_SECRET_NAME:-USABLE_API_TOKEN}"
 MCP_URL="${MCP_SERVER_URL:-https://usable.dev/api/mcp}"
-PROVIDER="${PROVIDER:-gemini}"
+PROVIDER="${PROVIDER:-opencode}"
 OPENROUTER_MODEL="${OPENROUTER_MODEL:-moonshotai/kimi-k2.5}"
 
 # Get the MCP token from environment using the secret name

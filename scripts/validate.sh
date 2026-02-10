@@ -566,7 +566,7 @@ main() {
   echo "Prompt prepared: $prompt_with_replacements"
   
   # Run validation with the configured provider
-  local provider="${PROVIDER:-gemini}"
+  local provider="${PROVIDER:-opencode}"
   if [ "$provider" = "opencode" ]; then
     run_func="run_opencode"
   else
