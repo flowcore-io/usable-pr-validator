@@ -1,6 +1,6 @@
 # 🤖 Usable PR Validator
 
-> Validate Pull Requests against your Usable knowledge base standards using Google Gemini AI
+> Validate Pull Requests against your Usable knowledge base standards using AI (OpenCode/OpenRouter or Google Gemini)
 
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Usable%20PR%20Validator-blue?logo=github)](https://github.com/marketplace/actions/usable-pr-validator)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -8,7 +8,8 @@
 
 ## ✨ Features
 
-- 🧠 **AI-Powered Validation**: Uses Google Gemini to understand context and architectural patterns
+- 🧠 **AI-Powered Validation**: Uses OpenCode/OpenRouter (default) or Google Gemini to understand context and architectural patterns
+- 🔀 **Multi-Provider Support**: Choose between OpenRouter (75+ models) or Google Gemini
 - 📚 **Usable Integration**: Validate PRs against your team's knowledge base stored in Usable
 - 🔌 **MCP Protocol**: Connects directly to Usable's MCP server for real-time standards
 - 🎯 **System Prompts**: Organization-wide validation standards fetched from Usable and auto-merged
@@ -25,6 +26,12 @@
 
 ### Prerequisites
 
+**For OpenRouter (default provider):**
+1. An OpenRouter API key ([get one at openrouter.ai](https://openrouter.ai/settings/keys))
+2. A Usable account with API token ([get one at usable.dev](https://usable.dev))
+3. GitHub repository with pull requests
+
+**For Google Gemini (alternative provider):**
 1. A Google Cloud project with Vertex AI API enabled
 2. A service account key with Vertex AI permissions
 3. A Usable account with API token ([get one at usable.dev](https://usable.dev))
@@ -57,6 +64,11 @@ git diff origin/{{BASE_BRANCH}}...{{HEAD_BRANCH}}
 
 Go to your repository Settings → Secrets → Actions and add:
 
+**For OpenRouter (default):**
+- `OPENROUTER_API_KEY`: Your OpenRouter API key (get from [openrouter.ai](https://openrouter.ai/settings/keys))
+- `USABLE_API_TOKEN`: Your Usable API token (get from [usable.dev](https://usable.dev) → Settings → API Tokens)
+
+**For Gemini (alternative):**
 - `GEMINI_SERVICE_ACCOUNT_KEY`: Base64-encoded service account JSON key
 
   ```bash
@@ -87,13 +99,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - uses: flowcore/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/pr-validation.md'
           workspace-id: 'your-workspace-uuid'
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
@@ -110,8 +122,11 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `prompt-fragment-id` | Usable fragment UUID to use as prompt (required when `use-dynamic-prompts` is `true`) | ✓ (with dynamic prompts) | |
 | `workspace-id` | Usable workspace UUID (required - used to fetch MCP system prompt) | ✓ | |
 | `merge-custom-prompt` | Merge fetched Usable prompt with custom `prompt-file` (only when both are provided) | | `true` |
-| `gemini-model` | Gemini model to use (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.5-pro`) | | `gemini-2.5-flash` |
-| `service-account-key-secret` | Secret name for service account key | | `GEMINI_SERVICE_ACCOUNT_KEY` |
+| `provider` | AI provider to use (`opencode` or `gemini`) | | `opencode` |
+| `openrouter-model` | OpenRouter model ID (when provider is `opencode`) | | `moonshotai/kimi-k2.5` |
+| `openrouter-api-key-secret` | Secret name for OpenRouter API key | | `OPENROUTER_API_KEY` |
+| `gemini-model` | Gemini model to use (when provider is `gemini`) | | `gemini-2.5-flash` |
+| `service-account-key-secret` | Secret name for Gemini service account key | | `GEMINI_SERVICE_ACCOUNT_KEY` |
 | `mcp-server-url` | Usable MCP server URL | | `https://usable.dev/api/mcp` |
 | `mcp-token-secret` | Secret name for Usable API token | | `USABLE_API_TOKEN` |
 | `fail-on-critical` | Fail build on critical violations | | `true` |
@@ -124,7 +139,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `head-ref` | Head reference for diff comparison | | PR head branch |
 | `allow-web-fetch` | Allow AI to use web_fetch tool for external resources (security consideration) | | `false` |
 
-> **Note**: You must set the `USABLE_API_TOKEN` secret (or the custom secret name specified in `mcp-token-secret`). Usable MCP integration is required for this action.
+> **Note**: You must set the `USABLE_API_TOKEN` secret and either `OPENROUTER_API_KEY` (default provider) or `GEMINI_SERVICE_ACCOUNT_KEY` (gemini provider). Usable MCP integration is required for this action.
 
 ### 🧠 System Prompts (Automatic)
 
@@ -154,9 +169,9 @@ This three-layer approach ensures:
 
 ### 📋 Smart Diff Summary (Efficient Validation)
 
-The action provides Gemini with a **compact summary** of changed files rather than dumping massive diffs into the prompt. This makes validation more reliable, scalable, and cost-effective.
+The action provides the AI with a **compact summary** of changed files rather than dumping massive diffs into the prompt. This makes validation more reliable, scalable, and cost-effective.
 
-**What Gemini Receives:**
+**What the AI Receives:**
 
 ```markdown
 ## 📋 Changed Files Summary
@@ -172,7 +187,7 @@ The action provides Gemini with a **compact summary** of changed files rather th
 - **Modified ranges**: Line 15-30, Line 55-61
 ```
 
-**How Gemini Uses It:**
+**How the AI Uses It:**
 
 1. **Reviews the summary** to understand scope and which files changed
 2. **Reads specific files** on-demand using `cat` or `git show HEAD:path/to/file.ts`
@@ -183,17 +198,17 @@ The action provides Gemini with a **compact summary** of changed files rather th
 **Benefits:**
 
 - ✅ **Scalable**: Works with PRs of any size (even 100+ files)
-- ✅ **Reliable**: Gemini doesn't need to run `git diff` (which can fail)
+- ✅ **Reliable**: AI doesn't need to run `git diff` (which can fail)
 - ✅ **Efficient**: Reads only what it needs, not entire file contents upfront
 - ✅ **Cost-effective**: Smaller prompt sizes = lower API costs
-- ✅ **Intelligent**: Agentic approach lets Gemini decide what to fetch
+- ✅ **Intelligent**: Agentic approach lets the AI decide what to fetch
 
 **Example Validation Flow:**
 
 ```text
 Summary shows: src/app/api/subscription/route.ts changed (lines 10-25)
 
-Gemini's approach:
+AI's approach:
 1. cat src/app/api/subscription/route.ts          # Read the changed file
 2. Focus on lines 10-25                            # That's what changed
 3. cat src/lib/services/subscription.service.ts   # Check the imported service
@@ -231,7 +246,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     prompt-fragment-id: 'user-prompt-uuid'
     workspace-id: 'your-workspace-uuid'
   env:
-    GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 
 # Static user prompt file (most common)
@@ -240,7 +255,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     prompt-file: '.github/prompts/pr-validation.md'
     workspace-id: 'your-workspace-uuid'
   env:
-    GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
@@ -255,13 +270,26 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 
 ## 🎯 Usage Examples
 
-### Minimal Setup
+### Minimal Setup (OpenRouter - default)
 
 ```yaml
 - uses: flowcore/usable-pr-validator@latest
   with:
     prompt-file: '.github/prompts/validate.md'
     workspace-id: 'your-workspace-uuid'
+  env:
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
+```
+
+### Using Gemini Instead
+
+```yaml
+- uses: flowcore/usable-pr-validator@latest
+  with:
+    prompt-file: '.github/prompts/validate.md'
+    workspace-id: 'your-workspace-uuid'
+    provider: 'gemini'
   env:
     GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
@@ -277,7 +305,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     mcp-server-url: 'https://your-custom-mcp.com/api/mcp'
     mcp-token-secret: 'YOUR_CUSTOM_TOKEN'
   env:
-    GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     YOUR_CUSTOM_TOKEN: ${{ secrets.YOUR_MCP_TOKEN }}
 ```
 
@@ -288,8 +316,8 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
   with:
     prompt-file: '.github/validation/standards.md'
     workspace-id: 'your-workspace-uuid'
-    gemini-model: 'gemini-2.5-pro'
-    service-account-key-secret: 'MY_GEMINI_KEY'
+    provider: 'opencode'
+    openrouter-model: 'anthropic/claude-sonnet-4-5'
     mcp-server-url: 'https://confluence.company.com/api/mcp'
     mcp-token-secret: 'CONFLUENCE_TOKEN'
     fail-on-critical: true
@@ -297,7 +325,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     artifact-retention-days: 90
     max-retries: 3
   env:
-    MY_GEMINI_KEY: ${{ secrets.GOOGLE_AI_KEY }}
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     CONFLUENCE_TOKEN: ${{ secrets.CONF_API_TOKEN }}
 ```
 
@@ -320,9 +348,9 @@ jobs:
           workspace-id: 'your-workspace-uuid'
           comment-title: 'Backend Validation'  # Creates unique comment
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
-  
+
   validate-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -336,7 +364,7 @@ jobs:
           workspace-id: 'your-workspace-uuid'
           comment-title: 'Frontend Validation'  # Creates unique comment
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
@@ -382,7 +410,7 @@ jobs:
           workspace-id: 'your-workspace-uuid'
           base-ref: ${{ steps.base-ref.outputs.ref }}  # Custom base reference
         env:
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
@@ -463,7 +491,7 @@ Usable is a team knowledge base and memory system that stores your:
    ```bash
    # In your repo: Settings → Secrets → Actions
    USABLE_API_TOKEN=your_usable_token_here
-   GEMINI_SERVICE_ACCOUNT_KEY=base64_encoded_key_here
+   OPENROUTER_API_KEY=your_openrouter_key_here
    ```
 
 3. **Configure Workflow**
@@ -474,7 +502,7 @@ Usable is a team knowledge base and memory system that stores your:
       prompt-file: '.github/prompts/pr-validation.md'
       workspace-id: 'your-workspace-uuid'
     env:
-      GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
   ```
 
@@ -544,11 +572,12 @@ jobs:
       # Customize as needed:
       # use-dynamic-prompts: true
       # prompt-fragment-id: 'fragment-uuid'
-      # gemini-model: 'gemini-2.5-flash'
+      # provider: 'opencode'
+      # openrouter-model: 'moonshotai/kimi-k2.5'
       # comment-title: '🔄 Custom Title'
       # fail-on-critical: false
     secrets:
-      GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
     permissions:
       contents: read
@@ -632,12 +661,11 @@ permissions:
 
 ### Security Best Practices
 
-1. Use Vertex AI (recommended) over API keys
-2. Rotate service account keys regularly
-3. Use least-privilege service accounts
-4. Enable audit logging in Google Cloud
-5. Review validation prompts for sensitive data
-6. **Keep `allow-web-fetch` disabled** (default) unless you specifically need it
+1. Rotate API keys regularly (OpenRouter or Google Cloud)
+2. Use least-privilege service accounts (Gemini provider)
+3. Review validation prompts for sensitive data
+4. **Keep `allow-web-fetch` disabled** (default) unless you specifically need it
+5. Use GitHub encrypted secrets for all API keys
 
 ### Web Fetch Security
 
@@ -672,19 +700,19 @@ The `allow-web-fetch` input controls whether the AI can download external resour
     prompt-file: '.github/prompts/validate-api-docs.md'
     allow-web-fetch: true  # Only enable when needed
   env:
-    GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
 ## 🐛 Troubleshooting
 
-### No Output from Gemini CLI
+### No Output from AI CLI
 
-**Symptom**: GitHub Action runs but shows no Gemini output or errors
+**Symptom**: GitHub Action runs but shows no AI output or errors
 
 **Possible Causes**:
 
-- Gemini CLI failing silently
+- AI CLI (OpenCode or Gemini) failing silently
 - Output buffering issues
 - Git diff failures preventing AI from analyzing changes
 
@@ -699,12 +727,12 @@ The `allow-web-fetch` input controls whether the AI can download external resour
 ✅ Three-dot diff works: origin/main...origin/feature-branch
 ```
 
-2. **Look for Gemini CLI output** in the logs:
+2. **Look for CLI output** in the logs:
 
 ```
-🤖 Running Gemini CLI
+🤖 Running OpenCode CLI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Model: gemini-2.5-flash
+Model: openrouter/moonshotai/kimi-k2.5
 Prompt size: XXXX bytes
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
@@ -859,14 +887,13 @@ DO NOT include thinking process or explanations!
 
 ### API Rate Limit Errors
 
-**Symptom**: 429 errors from Gemini API
+**Symptom**: 429 errors from AI API
 
 **Solution**:
 
-- Use Vertex AI (higher limits)
-- Increase `max-retries`
-- Add exponential backoff
-- Check Google Cloud quotas
+- Increase `max-retries` (automatic exponential backoff is built in)
+- For OpenRouter: check your rate limits at [openrouter.ai](https://openrouter.ai)
+- For Gemini: use Vertex AI (higher limits) and check Google Cloud quotas
 
 ### MCP Connection Failures
 
@@ -887,6 +914,16 @@ curl -H "Authorization: Bearer $TOKEN" $MCP_URL
 
 ## 📊 Cost Estimation
 
+### OpenRouter Pricing (default)
+
+| Model | Input (per 1M tokens) | Output (per 1M tokens) | Typical PR Cost |
+|-------|----------------------|----------------------|----------------|
+| moonshotai/kimi-k2.5 | $0.45 | $2.25 | $0.02-0.10 |
+| anthropic/claude-sonnet-4-5 | $3.00 | $15.00 | $0.15-0.75 |
+| openai/gpt-4o | $2.50 | $10.00 | $0.10-0.50 |
+
+**Estimate**: ~$0.02-0.10 per PR with moonshotai/kimi-k2.5 (default)
+
 ### Google Gemini Pricing (Vertex AI)
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) | Typical PR Cost |
@@ -895,7 +932,7 @@ curl -H "Authorization: Bearer $TOKEN" $MCP_URL
 | gemini-2.0-flash | $0.10 | $0.40 | $0.02-0.05 |
 | gemini-2.5-pro | $1.25 | $5.00 | $0.25-1.00 |
 
-**Estimate**: ~$0.01-0.05 per PR with gemini-2.5-flash (recommended)
+**Estimate**: ~$0.01-0.05 per PR with gemini-2.5-flash
 
 ### MCP Costs
 
@@ -948,7 +985,7 @@ git clone https://github.com/flowcore/usable-pr-validator.git
 cd usable-pr-validator
 
 # Test locally (requires act)
-act pull_request -s GEMINI_SERVICE_ACCOUNT_KEY="$(cat key.json | base64)"
+act pull_request -s OPENROUTER_API_KEY="your-key-here" -s USABLE_API_TOKEN="your-token"
 ```
 
 ## 📜 License
@@ -957,6 +994,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## 🙏 Acknowledgments
 
+- [OpenCode](https://opencode.ai) CLI for multi-provider AI capabilities
+- [OpenRouter](https://openrouter.ai) for unified model access
 - Google Gemini for AI capabilities
 - Model Context Protocol (MCP) community
 - GitHub Actions ecosystem

@@ -192,7 +192,7 @@ prepare_prompt() {
   local summary_exit_code=$?
   
   if [ $summary_exit_code -ne 0 ]; then
-    echo "::warning::Failed to generate diff summary. Gemini will need to discover changes manually." >&2
+    echo "::warning::Failed to generate diff summary. AI will need to discover changes manually." >&2
     DIFF_SUMMARY="⚠️ **Diff summary generation failed**
 
 Please use git commands to discover changes:
@@ -351,7 +351,85 @@ run_gemini() {
   return 1
 }
 
-# Extract validation report from Gemini output
+# Run OpenCode validation with retry logic
+run_opencode() {
+  local prompt_file="$1"
+  local retry_count=0
+  local max_retries="${MAX_RETRIES:-2}"
+  local model="${OPENROUTER_MODEL:-moonshotai/kimi-k2.5}"
+
+  while [ $retry_count -le "$max_retries" ]; do
+    echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running OpenCode validation..."
+
+    # Debug: Check prompt file
+    if [ ! -f "$prompt_file" ]; then
+      echo "::error::Prompt file does not exist: $prompt_file"
+      return 1
+    fi
+
+    echo "Prompt file: $prompt_file"
+    echo "Prompt file size: $(wc -c < "$prompt_file") bytes"
+    echo "Prompt file lines: $(wc -l < "$prompt_file") lines"
+
+    # Show detailed execution info
+    echo "🤖 Running OpenCode CLI"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Model: openrouter/$model"
+    echo "Prompt size: $(wc -c < "$prompt_file") bytes"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Run OpenCode CLI and capture output
+    set +e  # Temporarily disable exit on error to capture exit code
+
+    opencode run -m "openrouter/$model" "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
+    local exit_code=$?
+
+    set -e  # Re-enable exit on error
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    if [ $exit_code -eq 0 ]; then
+      echo "✅ OpenCode CLI completed successfully (exit code: 0)"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      return 0
+    else
+      echo "❌ OpenCode CLI failed (exit code: $exit_code)"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo ""
+
+      echo "⚠️ Check the output above for error details"
+
+      # Check if it's a retryable error
+      local is_retryable=false
+      if [ -f /tmp/validation-full-output.md ] && grep -q -E "(429|503|timeout|rate limit)" /tmp/validation-full-output.md; then
+        is_retryable=true
+      fi
+
+      if [ "$is_retryable" = true ]; then
+        retry_count=$((retry_count + 1))
+
+        if [ $retry_count -le "$max_retries" ]; then
+          wait_time=$((2 ** retry_count))
+          echo "⏳ Rate limit or timeout detected. Retrying after ${wait_time} seconds..."
+          sleep $wait_time
+        else
+          echo "::error::Maximum retries reached. Validation failed."
+          return 1
+        fi
+      else
+        # Non-retryable error
+        echo "::error::Non-retryable error occurred. See error details above."
+        return 1
+      fi
+    fi
+  done
+
+  return 1
+}
+
+# Extract validation report from AI output
 extract_report() {
   local full_output="$1"
   local report_file="/tmp/validation-report.md"
@@ -381,7 +459,7 @@ extract_report() {
   
   # Strategy 4: Use full output with warning
   echo "::warning::Could not find report markers. Using full output."
-  echo "::group::Gemini Full Output (first 50 lines)"
+  echo "::group::AI Full Output (first 50 lines)"
   head -50 "$full_output" || echo "Could not read output file"
   echo "::endgroup::"
   
@@ -487,8 +565,15 @@ main() {
   
   echo "Prompt prepared: $prompt_with_replacements"
   
-  # Run Gemini validation
-  if ! run_gemini "$prompt_with_replacements"; then
+  # Run validation with the configured provider
+  local provider="${PROVIDER:-opencode}"
+  if [ "$provider" = "opencode" ]; then
+    run_func="run_opencode"
+  else
+    run_func="run_gemini"
+  fi
+
+  if ! $run_func "$prompt_with_replacements"; then
     echo "::error::Validation execution failed"
     
     # Set failed outputs using heredoc delimiter
