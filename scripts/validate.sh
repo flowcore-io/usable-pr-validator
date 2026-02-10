@@ -382,7 +382,7 @@ run_opencode() {
     # Run OpenCode CLI and capture output
     set +e  # Temporarily disable exit on error to capture exit code
 
-    opencode -p "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
+    opencode -q -p "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
     local exit_code=$?
 
     set -e  # Re-enable exit on error
