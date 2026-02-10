@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0](https://github.com/flowcore-io/usable-pr-validator/compare/v1.6.0...v2.0.0) (2026-02-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* enhance AI provider support and update documentation for OpenCode and Gemini integration
+
+### Features
+
+* enhance AI provider support and update documentation for OpenCode and Gemini integration ([206df6d](https://github.com/flowcore-io/usable-pr-validator/commit/206df6dc5d4a6242bf2b264fcc08a80e5185d932))
+
+
+### Bug Fixes
+
+* update default provider to OpenCode in setup and validation scripts ([d132742](https://github.com/flowcore-io/usable-pr-validator/commit/d1327426d3bbdd9352ac2092b5c4195e5dfac09a))
+
 ## [1.6.0](https://github.com/flowcore-io/usable-pr-validator/compare/v1.5.2...v1.6.0) (2025-10-24)
 
 
