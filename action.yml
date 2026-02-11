@@ -1,5 +1,5 @@
 name: 'Usable PR Validator'
-description: 'Validate Pull Requests against your Usable knowledge base standards using AI (OpenCode/OpenRouter or Google Gemini) and Usable MCP integration'
+description: 'Validate Pull Requests against your Usable knowledge base standards using AI (OpenCode with OpenRouter, Anthropic, OpenAI, or Google Gemini) and Usable MCP integration'
 author: 'Flowcore'
 
 branding:

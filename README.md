@@ -1,6 +1,6 @@
 # 🤖 Usable PR Validator
 
-> Validate Pull Requests against your Usable knowledge base standards using AI (OpenCode/OpenRouter or Google Gemini)
+> Validate Pull Requests against your Usable knowledge base standards using AI (OpenCode with OpenRouter, Anthropic, OpenAI, or Google Gemini)
 
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Usable%20PR%20Validator-blue?logo=github)](https://github.com/marketplace/actions/usable-pr-validator)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -8,8 +8,8 @@
 
 ## ✨ Features
 
-- 🧠 **AI-Powered Validation**: Uses OpenCode/OpenRouter (default) or Google Gemini to understand context and architectural patterns
-- 🔀 **Multi-Provider Support**: Choose between OpenRouter (75+ models) or Google Gemini
+- 🧠 **AI-Powered Validation**: Uses OpenCode with OpenRouter (default), Anthropic, OpenAI, or Google Gemini to understand context and architectural patterns
+- 🔀 **Multi-Provider Support**: Choose between OpenRouter (75+ models), Anthropic, OpenAI, or Google Gemini
 - 📚 **Usable Integration**: Validate PRs against your team's knowledge base stored in Usable
 - 🔌 **MCP Protocol**: Connects directly to Usable's MCP server for real-time standards
 - 🎯 **System Prompts**: Organization-wide validation standards fetched from Usable and auto-merged
@@ -26,8 +26,8 @@
 
 ### Prerequisites
 
-**For OpenRouter (default provider):**
-1. An OpenRouter API key ([get one at openrouter.ai](https://openrouter.ai/settings/keys))
+**For OpenCode (default, supports OpenRouter, Anthropic, OpenAI):**
+1. An API key for your chosen provider (e.g., [OpenRouter](https://openrouter.ai/settings/keys), [Anthropic](https://console.anthropic.com/), or [OpenAI](https://platform.openai.com/))
 2. A Usable account with API token ([get one at usable.dev](https://usable.dev))
 3. GitHub repository with pull requests
 
@@ -36,6 +36,24 @@
 2. A service account key with Vertex AI permissions
 3. A Usable account with API token ([get one at usable.dev](https://usable.dev))
 4. GitHub repository with pull requests
+
+### Choosing a Provider
+
+Provider selection works in two levels:
+
+1. **`provider`** chooses the CLI tool: `opencode` (default) or `gemini`
+2. **`opencode-provider`** chooses which AI service OpenCode connects to (only applies when `provider` is `opencode`)
+
+```
+provider
+├── opencode (default)
+│   └── opencode-provider
+│       ├── openrouter (default) ─ 75+ models via OpenRouter
+│       ├── anthropic             ─ Claude models direct
+│       └── openai                ─ GPT models direct
+└── gemini
+    └── Uses Google Gemini directly (configured via gemini-model)
+```
 
 ### Step 1: Create Validation Prompt
 
@@ -67,6 +85,14 @@ Go to your repository Settings → Secrets → Actions and add:
 **For OpenCode (default):**
 - `OPENCODE_API_KEY`: Your AI provider API key (e.g., [OpenRouter](https://openrouter.ai/settings/keys), [Anthropic](https://console.anthropic.com/), or [OpenAI](https://platform.openai.com/))
 - `USABLE_API_TOKEN`: Your Usable API token (get from [usable.dev](https://usable.dev) → Settings → API Tokens)
+
+> If using a non-default provider, also set `opencode-provider` and `opencode-model` in your workflow:
+>
+> | Provider | `opencode-provider` | `opencode-model` example |
+> |----------|--------------------|-----------------------|
+> | OpenRouter (default) | `openrouter` | `moonshotai/kimi-k2.5` |
+> | Anthropic | `anthropic` | `claude-sonnet-4-5` |
+> | OpenAI | `openai` | `gpt-4o` |
 
 **For Gemini (alternative):**
 - `GEMINI_SERVICE_ACCOUNT_KEY`: Base64-encoded service account JSON key
@@ -271,7 +297,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 
 ## 🎯 Usage Examples
 
-### Minimal Setup (OpenRouter - default)
+### Minimal Setup (OpenCode - default)
 
 ```yaml
 - uses: flowcore/usable-pr-validator@latest
