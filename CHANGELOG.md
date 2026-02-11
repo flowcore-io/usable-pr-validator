@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1](https://github.com/flowcore-io/usable-pr-validator/compare/v2.1.0...v2.1.1) (2026-02-11)
+
+
+### Bug Fixes
+
+* update OpenCode CLI installation URL to use the official site ([e5f5c02](https://github.com/flowcore-io/usable-pr-validator/commit/e5f5c0270185bae79ceb8f88d41cfad754bdfbe2))
+* update OpenCode CLI installation URL to use the official site ([d3caf38](https://github.com/flowcore-io/usable-pr-validator/commit/d3caf38e43596c4887be586d25ea36c515144bef))
+
 ## [2.1.0](https://github.com/flowcore-io/usable-pr-validator/compare/v2.0.4...v2.1.0) (2026-02-11)
 
 
