@@ -18,7 +18,7 @@ fi
 # Install OpenCode CLI
 echo "Installing OpenCode CLI..."
 if ! command -v opencode &> /dev/null; then
-  curl -fsSL https://raw.githubusercontent.com/opencode-ai/opencode/refs/heads/main/install | bash
+  curl -fsSL https://opencode.ai/install | bash
 
   # The installer puts opencode in ~/.opencode/bin and updates .bashrc,
   # but PATH changes from .bashrc don't apply to the current shell.
