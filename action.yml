@@ -1,5 +1,5 @@
 name: 'Usable PR Validator'
-description: 'Validate Pull Requests against your Usable knowledge base standards using AI (OpenCode/OpenRouter or Google Gemini) and Usable MCP integration'
+description: 'Validate Pull Requests against your Usable knowledge base standards using AI (OpenCode with OpenRouter, Anthropic, OpenAI, or Google Gemini) and Usable MCP integration'
 author: 'Flowcore'
 
 branding:
@@ -86,14 +86,18 @@ inputs:
     description: 'AI provider to use (opencode or gemini)'
     required: false
     default: 'opencode'
-  openrouter-model:
-    description: 'OpenRouter model ID when provider is opencode (e.g., moonshotai/kimi-k2.5)'
+  opencode-provider:
+    description: 'AI provider for OpenCode (e.g., openrouter, anthropic, openai)'
+    required: false
+    default: 'openrouter'
+  opencode-model:
+    description: 'Model ID for OpenCode (e.g., moonshotai/kimi-k2.5 for openrouter, claude-sonnet-4-5 for anthropic)'
     required: false
     default: 'moonshotai/kimi-k2.5'
-  openrouter-api-key-secret:
-    description: 'Name of secret containing OpenRouter API key (when provider is opencode)'
+  opencode-api-key-secret:
+    description: 'Name of secret containing the API key for the configured opencode-provider'
     required: false
-    default: 'OPENROUTER_API_KEY'
+    default: 'OPENCODE_API_KEY'
 
 outputs:
   validation-status:
@@ -196,7 +200,8 @@ runs:
       if: inputs.provider == 'opencode'
       shell: bash
       env:
-        OPENROUTER_SECRET_NAME: ${{ inputs.openrouter-api-key-secret }}
+        OPENCODE_PROVIDER: ${{ inputs.opencode-provider }}
+        OPENCODE_SECRET_NAME: ${{ inputs.opencode-api-key-secret }}
       run: |
         ${{ github.action_path }}/scripts/setup-opencode.sh
 
@@ -319,7 +324,8 @@ runs:
         MCP_SECRET_NAME: ${{ inputs.mcp-token-secret }}
         WORKSPACE_ID: ${{ inputs.workspace-id }}
         PROVIDER: ${{ inputs.provider }}
-        OPENROUTER_MODEL: ${{ inputs.openrouter-model }}
+        OPENCODE_PROVIDER: ${{ inputs.opencode-provider }}
+        OPENCODE_MODEL: ${{ inputs.opencode-model }}
       run: |
         ${{ github.action_path }}/scripts/setup-mcp.sh
     
@@ -344,7 +350,8 @@ runs:
         USE_DYNAMIC_PROMPTS: ${{ inputs.use-dynamic-prompts }}
         PROVIDER: ${{ inputs.provider }}
         GEMINI_MODEL: ${{ inputs.gemini-model }}
-        OPENROUTER_MODEL: ${{ inputs.openrouter-model }}
+        OPENCODE_PROVIDER: ${{ inputs.opencode-provider }}
+        OPENCODE_MODEL: ${{ inputs.opencode-model }}
         MAX_RETRIES: ${{ inputs.max-retries }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         PR_TITLE: ${{ github.event.pull_request.title }}
@@ -384,7 +391,7 @@ runs:
           
           const provider = '${{ inputs.provider }}';
           const modelInfo = provider === 'opencode'
-            ? 'OpenRouter ${{ inputs.openrouter-model }}'
+            ? '${{ inputs.opencode-provider }}/${{ inputs.opencode-model }}'
             : 'Google Gemini ${{ inputs.gemini-model }}';
 
           const commentBody = marker + '\n## 🤖 ' + commentTitle + '\n\n' +

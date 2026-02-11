@@ -1,6 +1,6 @@
 # 🤖 Usable PR Validator
 
-> Validate Pull Requests against your Usable knowledge base standards using AI (OpenCode/OpenRouter or Google Gemini)
+> Validate Pull Requests against your Usable knowledge base standards using AI (OpenCode with OpenRouter, Anthropic, OpenAI, or Google Gemini)
 
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Usable%20PR%20Validator-blue?logo=github)](https://github.com/marketplace/actions/usable-pr-validator)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -8,8 +8,8 @@
 
 ## ✨ Features
 
-- 🧠 **AI-Powered Validation**: Uses OpenCode/OpenRouter (default) or Google Gemini to understand context and architectural patterns
-- 🔀 **Multi-Provider Support**: Choose between OpenRouter (75+ models) or Google Gemini
+- 🧠 **AI-Powered Validation**: Uses OpenCode with OpenRouter (default), Anthropic, OpenAI, or Google Gemini to understand context and architectural patterns
+- 🔀 **Multi-Provider Support**: Choose between OpenRouter (75+ models), Anthropic, OpenAI, or Google Gemini
 - 📚 **Usable Integration**: Validate PRs against your team's knowledge base stored in Usable
 - 🔌 **MCP Protocol**: Connects directly to Usable's MCP server for real-time standards
 - 🎯 **System Prompts**: Organization-wide validation standards fetched from Usable and auto-merged
@@ -26,8 +26,8 @@
 
 ### Prerequisites
 
-**For OpenRouter (default provider):**
-1. An OpenRouter API key ([get one at openrouter.ai](https://openrouter.ai/settings/keys))
+**For OpenCode (default, supports OpenRouter, Anthropic, OpenAI):**
+1. An API key for your chosen provider (e.g., [OpenRouter](https://openrouter.ai/settings/keys), [Anthropic](https://console.anthropic.com/), or [OpenAI](https://platform.openai.com/))
 2. A Usable account with API token ([get one at usable.dev](https://usable.dev))
 3. GitHub repository with pull requests
 
@@ -36,6 +36,24 @@
 2. A service account key with Vertex AI permissions
 3. A Usable account with API token ([get one at usable.dev](https://usable.dev))
 4. GitHub repository with pull requests
+
+### Choosing a Provider
+
+Provider selection works in two levels:
+
+1. **`provider`** chooses the CLI tool: `opencode` (default) or `gemini`
+2. **`opencode-provider`** chooses which AI service OpenCode connects to (only applies when `provider` is `opencode`)
+
+```
+provider
+├── opencode (default)
+│   └── opencode-provider
+│       ├── openrouter (default) ─ 75+ models via OpenRouter
+│       ├── anthropic             ─ Claude models direct
+│       └── openai                ─ GPT models direct
+└── gemini
+    └── Uses Google Gemini directly (configured via gemini-model)
+```
 
 ### Step 1: Create Validation Prompt
 
@@ -64,9 +82,17 @@ git diff origin/{{BASE_BRANCH}}...{{HEAD_BRANCH}}
 
 Go to your repository Settings → Secrets → Actions and add:
 
-**For OpenRouter (default):**
-- `OPENROUTER_API_KEY`: Your OpenRouter API key (get from [openrouter.ai](https://openrouter.ai/settings/keys))
+**For OpenCode (default):**
+- `OPENCODE_API_KEY`: Your AI provider API key (e.g., [OpenRouter](https://openrouter.ai/settings/keys), [Anthropic](https://console.anthropic.com/), or [OpenAI](https://platform.openai.com/))
 - `USABLE_API_TOKEN`: Your Usable API token (get from [usable.dev](https://usable.dev) → Settings → API Tokens)
+
+> If using a non-default provider, also set `opencode-provider` and `opencode-model` in your workflow:
+>
+> | Provider | `opencode-provider` | `opencode-model` example |
+> |----------|--------------------|-----------------------|
+> | OpenRouter (default) | `openrouter` | `moonshotai/kimi-k2.5` |
+> | Anthropic | `anthropic` | `claude-sonnet-4-5` |
+> | OpenAI | `openai` | `gpt-4o` |
 
 **For Gemini (alternative):**
 - `GEMINI_SERVICE_ACCOUNT_KEY`: Base64-encoded service account JSON key
@@ -105,7 +131,7 @@ jobs:
           prompt-file: '.github/prompts/pr-validation.md'
           workspace-id: 'your-workspace-uuid'
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
@@ -123,8 +149,9 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `workspace-id` | Usable workspace UUID (required - used to fetch MCP system prompt) | ✓ | |
 | `merge-custom-prompt` | Merge fetched Usable prompt with custom `prompt-file` (only when both are provided) | | `true` |
 | `provider` | AI provider to use (`opencode` or `gemini`) | | `opencode` |
-| `openrouter-model` | OpenRouter model ID (when provider is `opencode`) | | `moonshotai/kimi-k2.5` |
-| `openrouter-api-key-secret` | Secret name for OpenRouter API key | | `OPENROUTER_API_KEY` |
+| `opencode-provider` | AI provider for OpenCode (e.g., `openrouter`, `anthropic`, `openai`) | | `openrouter` |
+| `opencode-model` | Model ID for OpenCode | | `moonshotai/kimi-k2.5` |
+| `opencode-api-key-secret` | Secret name for the configured opencode-provider API key | | `OPENCODE_API_KEY` |
 | `gemini-model` | Gemini model to use (when provider is `gemini`) | | `gemini-2.5-flash` |
 | `service-account-key-secret` | Secret name for Gemini service account key | | `GEMINI_SERVICE_ACCOUNT_KEY` |
 | `mcp-server-url` | Usable MCP server URL | | `https://usable.dev/api/mcp` |
@@ -139,7 +166,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `head-ref` | Head reference for diff comparison | | PR head branch |
 | `allow-web-fetch` | Allow AI to use web_fetch tool for external resources (security consideration) | | `false` |
 
-> **Note**: You must set the `USABLE_API_TOKEN` secret and either `OPENROUTER_API_KEY` (default provider) or `GEMINI_SERVICE_ACCOUNT_KEY` (gemini provider). Usable MCP integration is required for this action.
+> **Note**: You must set the `USABLE_API_TOKEN` secret and either `OPENCODE_API_KEY` (default provider) or `GEMINI_SERVICE_ACCOUNT_KEY` (gemini provider). Usable MCP integration is required for this action.
 
 ### 🧠 System Prompts (Automatic)
 
@@ -246,7 +273,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     prompt-fragment-id: 'user-prompt-uuid'
     workspace-id: 'your-workspace-uuid'
   env:
-    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 
 # Static user prompt file (most common)
@@ -255,7 +282,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     prompt-file: '.github/prompts/pr-validation.md'
     workspace-id: 'your-workspace-uuid'
   env:
-    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
@@ -270,7 +297,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 
 ## 🎯 Usage Examples
 
-### Minimal Setup (OpenRouter - default)
+### Minimal Setup (OpenCode - default)
 
 ```yaml
 - uses: flowcore/usable-pr-validator@latest
@@ -278,7 +305,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     prompt-file: '.github/prompts/validate.md'
     workspace-id: 'your-workspace-uuid'
   env:
-    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
@@ -305,7 +332,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     mcp-server-url: 'https://your-custom-mcp.com/api/mcp'
     mcp-token-secret: 'YOUR_CUSTOM_TOKEN'
   env:
-    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
     YOUR_CUSTOM_TOKEN: ${{ secrets.YOUR_MCP_TOKEN }}
 ```
 
@@ -317,7 +344,8 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     prompt-file: '.github/validation/standards.md'
     workspace-id: 'your-workspace-uuid'
     provider: 'opencode'
-    openrouter-model: 'anthropic/claude-sonnet-4-5'
+    opencode-provider: 'anthropic'
+    opencode-model: 'claude-sonnet-4-5'
     mcp-server-url: 'https://confluence.company.com/api/mcp'
     mcp-token-secret: 'CONFLUENCE_TOKEN'
     fail-on-critical: true
@@ -325,7 +353,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     artifact-retention-days: 90
     max-retries: 3
   env:
-    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
     CONFLUENCE_TOKEN: ${{ secrets.CONF_API_TOKEN }}
 ```
 
@@ -348,7 +376,7 @@ jobs:
           workspace-id: 'your-workspace-uuid'
           comment-title: 'Backend Validation'  # Creates unique comment
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 
   validate-frontend:
@@ -364,7 +392,7 @@ jobs:
           workspace-id: 'your-workspace-uuid'
           comment-title: 'Frontend Validation'  # Creates unique comment
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
@@ -410,7 +438,7 @@ jobs:
           workspace-id: 'your-workspace-uuid'
           base-ref: ${{ steps.base-ref.outputs.ref }}  # Custom base reference
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
@@ -491,7 +519,7 @@ Usable is a team knowledge base and memory system that stores your:
    ```bash
    # In your repo: Settings → Secrets → Actions
    USABLE_API_TOKEN=your_usable_token_here
-   OPENROUTER_API_KEY=your_openrouter_key_here
+   OPENCODE_API_KEY=your_api_key_here
    ```
 
 3. **Configure Workflow**
@@ -502,7 +530,7 @@ Usable is a team knowledge base and memory system that stores your:
       prompt-file: '.github/prompts/pr-validation.md'
       workspace-id: 'your-workspace-uuid'
     env:
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
       USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
   ```
 
@@ -573,11 +601,11 @@ jobs:
       # use-dynamic-prompts: true
       # prompt-fragment-id: 'fragment-uuid'
       # provider: 'opencode'
-      # openrouter-model: 'moonshotai/kimi-k2.5'
+      # opencode-model: 'moonshotai/kimi-k2.5'
       # comment-title: '🔄 Custom Title'
       # fail-on-critical: false
     secrets:
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
       USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
     permissions:
       contents: read
@@ -700,7 +728,7 @@ The `allow-web-fetch` input controls whether the AI can download external resour
     prompt-file: '.github/prompts/validate-api-docs.md'
     allow-web-fetch: true  # Only enable when needed
   env:
-    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 ```
 
@@ -985,7 +1013,7 @@ git clone https://github.com/flowcore/usable-pr-validator.git
 cd usable-pr-validator
 
 # Test locally (requires act)
-act pull_request -s OPENROUTER_API_KEY="your-key-here" -s USABLE_API_TOKEN="your-token"
+act pull_request -s OPENCODE_API_KEY="your-key-here" -s USABLE_API_TOKEN="your-token"
 ```
 
 ## 📜 License
