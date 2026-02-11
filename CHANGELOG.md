@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0](https://github.com/flowcore-io/usable-pr-validator/compare/v2.0.4...v2.1.0) (2026-02-11)
+
+
+### Features
+
+* add opencode-provider input for OpenCode integration and update related scripts ([9367c99](https://github.com/flowcore-io/usable-pr-validator/commit/9367c99c513a94a4ec65a1f40925e016a91515a6))
+* enhance documentation for multi-provider support in Usable PR Validator ([013f3ca](https://github.com/flowcore-io/usable-pr-validator/commit/013f3ca511c09b4e1cdacec5596f592ac6b4310d))
+* update OpenCode references to use consistent naming and improve documentation ([c852b91](https://github.com/flowcore-io/usable-pr-validator/commit/c852b9132e3d50a3926a4d69660b0573c70ec326))
+
 ## [2.0.4](https://github.com/flowcore-io/usable-pr-validator/compare/v2.0.3...v2.0.4) (2026-02-11)
 
 
