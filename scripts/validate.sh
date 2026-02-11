@@ -356,7 +356,9 @@ run_opencode() {
   local prompt_file="$1"
   local retry_count=0
   local max_retries="${MAX_RETRIES:-2}"
+  local opencode_provider="${OPENCODE_PROVIDER:-openrouter}"
   local model="${OPENROUTER_MODEL:-moonshotai/kimi-k2.5}"
+  local full_model="${opencode_provider}/${model}"
 
   while [ $retry_count -le "$max_retries" ]; do
     echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running OpenCode validation..."
@@ -374,7 +376,7 @@ run_opencode() {
     # Show detailed execution info
     echo "🤖 Running OpenCode CLI"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Model: openrouter/$model"
+    echo "Model: $full_model"
     echo "Prompt size: $(wc -c < "$prompt_file") bytes"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
@@ -382,7 +384,7 @@ run_opencode() {
     # Run OpenCode CLI and capture output
     set +e  # Temporarily disable exit on error to capture exit code
 
-    opencode -q -m "openrouter/$model" -p "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
+    opencode run -m "$full_model" "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
     local exit_code=$?
 
     set -e  # Re-enable exit on error

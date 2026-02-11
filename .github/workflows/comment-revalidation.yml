@@ -35,8 +35,13 @@ on:
         required: false
         type: string
         default: 'gemini-2.5-flash'
+      opencode-provider:
+        description: 'AI provider for OpenCode (e.g., openrouter, anthropic, openai)'
+        required: false
+        type: string
+        default: 'openrouter'
       openrouter-model:
-        description: 'OpenRouter model ID (when provider is opencode)'
+        description: 'Model ID (when provider is opencode)'
         required: false
         type: string
         default: 'moonshotai/kimi-k2.5'
@@ -288,6 +293,7 @@ jobs:
           base-ref: ${{ steps.base-ref.outputs.base-ref }}
           provider: ${{ inputs.provider || 'opencode' }}
           gemini-model: ${{ inputs.gemini-model || 'gemini-2.5-flash' }}
+          opencode-provider: ${{ inputs.opencode-provider || 'openrouter' }}
           openrouter-model: ${{ inputs.openrouter-model || 'moonshotai/kimi-k2.5' }}
           comment-title: ${{ inputs.comment-title || '🔄 Revalidation (Comment Triggered)' }}
           comment-mode: 'create'

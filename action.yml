@@ -86,12 +86,16 @@ inputs:
     description: 'AI provider to use (opencode or gemini)'
     required: false
     default: 'opencode'
+  opencode-provider:
+    description: 'AI provider for OpenCode (e.g., openrouter, anthropic, openai)'
+    required: false
+    default: 'openrouter'
   openrouter-model:
-    description: 'OpenRouter model ID when provider is opencode (e.g., moonshotai/kimi-k2.5)'
+    description: 'Model ID when provider is opencode (e.g., moonshotai/kimi-k2.5 for openrouter, claude-sonnet-4-5 for anthropic)'
     required: false
     default: 'moonshotai/kimi-k2.5'
   openrouter-api-key-secret:
-    description: 'Name of secret containing OpenRouter API key (when provider is opencode)'
+    description: 'Name of secret containing the API key for the configured opencode-provider'
     required: false
     default: 'OPENROUTER_API_KEY'
 
@@ -319,6 +323,7 @@ runs:
         MCP_SECRET_NAME: ${{ inputs.mcp-token-secret }}
         WORKSPACE_ID: ${{ inputs.workspace-id }}
         PROVIDER: ${{ inputs.provider }}
+        OPENCODE_PROVIDER: ${{ inputs.opencode-provider }}
         OPENROUTER_MODEL: ${{ inputs.openrouter-model }}
       run: |
         ${{ github.action_path }}/scripts/setup-mcp.sh
@@ -344,6 +349,7 @@ runs:
         USE_DYNAMIC_PROMPTS: ${{ inputs.use-dynamic-prompts }}
         PROVIDER: ${{ inputs.provider }}
         GEMINI_MODEL: ${{ inputs.gemini-model }}
+        OPENCODE_PROVIDER: ${{ inputs.opencode-provider }}
         OPENROUTER_MODEL: ${{ inputs.openrouter-model }}
         MAX_RETRIES: ${{ inputs.max-retries }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -384,7 +390,7 @@ runs:
           
           const provider = '${{ inputs.provider }}';
           const modelInfo = provider === 'opencode'
-            ? 'OpenRouter ${{ inputs.openrouter-model }}'
+            ? '${{ inputs.opencode-provider }}/${{ inputs.openrouter-model }}'
             : 'Google Gemini ${{ inputs.gemini-model }}';
 
           const commentBody = marker + '\n## 🤖 ' + commentTitle + '\n\n' +
