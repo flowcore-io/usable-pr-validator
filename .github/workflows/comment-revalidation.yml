@@ -40,7 +40,7 @@ on:
         required: false
         type: string
         default: 'openrouter'
-      openrouter-model:
+      opencode-model:
         description: 'Model ID (when provider is opencode)'
         required: false
         type: string
@@ -59,8 +59,8 @@ on:
       GEMINI_SERVICE_ACCOUNT_KEY:
         description: 'Base64-encoded Gemini service account key (required when provider is gemini)'
         required: false
-      OPENROUTER_API_KEY:
-        description: 'OpenRouter API key (required when provider is opencode)'
+      OPENCODE_API_KEY:
+        description: 'OpenCode provider API key (required when provider is opencode)'
         required: false
       USABLE_API_TOKEN:
         description: 'Usable API token'
@@ -294,14 +294,14 @@ jobs:
           provider: ${{ inputs.provider || 'opencode' }}
           gemini-model: ${{ inputs.gemini-model || 'gemini-2.5-flash' }}
           opencode-provider: ${{ inputs.opencode-provider || 'openrouter' }}
-          openrouter-model: ${{ inputs.openrouter-model || 'moonshotai/kimi-k2.5' }}
+          opencode-model: ${{ inputs.opencode-model || 'moonshotai/kimi-k2.5' }}
           comment-title: ${{ inputs.comment-title || '🔄 Revalidation (Comment Triggered)' }}
           comment-mode: 'create'
           fail-on-critical: ${{ inputs.fail-on-critical || false }}
           override-comment: ${{ needs.check-trigger.outputs.comment-body }}
         env:
           GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
           COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
       

@@ -357,7 +357,7 @@ run_opencode() {
   local retry_count=0
   local max_retries="${MAX_RETRIES:-2}"
   local opencode_provider="${OPENCODE_PROVIDER:-openrouter}"
-  local model="${OPENROUTER_MODEL:-moonshotai/kimi-k2.5}"
+  local model="${OPENCODE_MODEL:-moonshotai/kimi-k2.5}"
   local full_model="${opencode_provider}/${model}"
 
   while [ $retry_count -le "$max_retries" ]; do

@@ -8,7 +8,7 @@ MCP_SECRET_NAME="${MCP_SECRET_NAME:-USABLE_API_TOKEN}"
 MCP_URL="${MCP_SERVER_URL:-https://usable.dev/api/mcp}"
 PROVIDER="${PROVIDER:-opencode}"
 OPENCODE_PROVIDER="${OPENCODE_PROVIDER:-openrouter}"
-OPENROUTER_MODEL="${OPENROUTER_MODEL:-moonshotai/kimi-k2.5}"
+OPENCODE_MODEL="${OPENCODE_MODEL:-moonshotai/kimi-k2.5}"
 
 # Get the MCP token from environment using the secret name
 MCP_TOKEN="${!MCP_SECRET_NAME:-}"
@@ -34,7 +34,7 @@ if [ "$PROVIDER" = "opencode" ]; then
   "provider": {
     "${OPENCODE_PROVIDER}": {}
   },
-  "model": "${OPENCODE_PROVIDER}/${OPENROUTER_MODEL}",
+  "model": "${OPENCODE_PROVIDER}/${OPENCODE_MODEL}",
   "autoupdate": false,
   "mcp": {
     "usable": {
@@ -59,7 +59,7 @@ EOF
 
   echo "✅ OpenCode MCP server configured"
   echo "  URL: $MCP_URL"
-  echo "  Model: ${OPENCODE_PROVIDER}/${OPENROUTER_MODEL}"
+  echo "  Model: ${OPENCODE_PROVIDER}/${OPENCODE_MODEL}"
   echo "  Settings file: ./opencode.json"
 
   # Debug: Show settings file content (mask token)
