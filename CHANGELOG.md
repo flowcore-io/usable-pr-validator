@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2](https://github.com/flowcore-io/usable-pr-validator/compare/v2.1.1...v2.1.2) (2026-04-15)
+
+
+### Bug Fixes
+
+* annotate deleted files + retry on transient upstream errors ([#29](https://github.com/flowcore-io/usable-pr-validator/issues/29)) ([f3e38fe](https://github.com/flowcore-io/usable-pr-validator/commit/f3e38feb3e26b9e0645b5e8a6f32a2b6c09df95c))
+
 ## [2.1.1](https://github.com/flowcore-io/usable-pr-validator/compare/v2.1.0...v2.1.1) (2026-02-11)
 
 
