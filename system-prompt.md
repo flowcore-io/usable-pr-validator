@@ -197,14 +197,26 @@ After documenting the deviation:
 
    **You will receive a compact summary listing:**
    - All changed files
+   - A **Status** field per file: `ADDED`, `MODIFIED`, `DELETED`, `RENAMED`, `COPIED`, or `TYPE-CHANGED`
    - Number of additions/deletions per file
-   - Line ranges that were modified
+   - Line ranges that were modified (only for non-deleted files)
+
+   **⚠️ DELETED files — STOP condition**
+
+   Files annotated with `Status: DELETED` no longer exist in the working tree. Attempting to read them will fail with `File not found`. When that happens:
+
+   - **Do NOT retry** the read with a different path format
+   - **Do NOT** loop through variations of the path
+   - **Trust** the `Status: DELETED` annotation in the summary
+   - If you need to see what was removed, use `git show origin/<BASE>:path/to/deleted.ts` (where `<BASE>` is the base branch) or inspect the diff with `git diff origin/<BASE>...origin/<HEAD> -- path/to/deleted.ts` — NEVER a bare `cat` or `Read` on the working-tree path
+
+   Failing to stop on deleted files wastes tool-call budget and can trip the agent's loop detector, which will abort the entire validation run.
 
    **Your workflow:**
 
    a. **Review the summary** to understand scope and impact
 
-   b. **Read specific files** as needed using:
+   b. **Read specific files** (ADDED / MODIFIED / RENAMED / TYPE-CHANGED only) as needed using:
 
       ```bash
       # Read current state of a changed file
@@ -232,26 +244,29 @@ After documenting the deviation:
    **⚠️ IMPORTANT: You do NOT need to run `git diff`**
 
    The summary already tells you what changed. Your job is to:
-   - ✅ **Read the current state** of files that changed
+   - ✅ **Read the current state** of files that changed (respecting Status)
    - ✅ **Focus on the modified line ranges** mentioned in the summary
    - ✅ **Check related files** when you need context
    - ❌ **Do NOT try to run `git diff`** - you already have the change list
+   - ❌ **Do NOT try to read DELETED files** - respect the Status annotation
 
    **Example workflow:**
 
    ```text
-   Summary shows: src/app/api/users/route.ts changed (lines 10-25)
+   Summary shows:
+     - src/app/api/users/route.ts        Status: MODIFIED  (lines 10-25)
+     - src/handlers/legacy.handler.ts    Status: DELETED
 
-   1. Read the file: cat src/app/api/users/route.ts
+   1. Read the modified file: cat src/app/api/users/route.ts
    2. Focus on lines 10-25 (that's what changed)
-   3. Check if it imports a service: cat src/lib/services/user.service.ts
-   4. Validate against standards
+   3. SKIP src/handlers/legacy.handler.ts entirely — it's gone
+   4. Check if route.ts imports a service: cat src/lib/services/user.service.ts
+   5. Validate against standards
    ```
 
    **If you cannot read the files:**
-   - Report which files you tried to access
-   - Explain what you were trying to validate
-   - Mark the validation as incomplete
+   - Check the Status annotation first — if the file is DELETED, that is expected, not an error
+   - For non-deleted files: report which files you tried to access, explain what you were trying to validate, and mark the validation as incomplete
 
 3. **Validate Against Standards**
    - Use the knowledge base to find relevant standards
