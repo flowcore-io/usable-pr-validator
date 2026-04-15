@@ -100,68 +100,127 @@ verify_git_refs() {
   fi
 }
 
-# Generate compact diff summary with file paths and line ranges
+# Generate compact diff summary with file paths, change status, and line ranges.
+#
+# Each file is annotated with its change status (ADDED / MODIFIED / DELETED / RENAMED)
+# so the validating LLM knows NOT to try reading deleted files. Previous versions
+# emitted a flat file list which caused the LLM to repeatedly fail tool calls on
+# deleted files and occasionally trip the doom-loop detector.
 generate_diff_summary() {
   local base_ref="origin/${BASE_BRANCH}"
   local head_ref="origin/${HEAD_BRANCH}"
-  
+
   # Verify refs exist before generating summary
   if ! git rev-parse "$base_ref" >/dev/null 2>&1; then
     echo "⚠️ **Unable to generate diff summary**: Base ref not found: $base_ref"
     return 1
   fi
-  
+
   if ! git rev-parse "$head_ref" >/dev/null 2>&1; then
     echo "⚠️ **Unable to generate diff summary**: Head ref not found: $head_ref"
     return 1
   fi
-  
+
   local file_count
   file_count=$(git diff --name-only "$base_ref...$head_ref" 2>/dev/null | wc -l | tr -d ' ')
-  
+
   if [ "$file_count" -eq 0 ]; then
     echo "ℹ️ **No files changed** in this PR"
     return 0
   fi
-  
+
+  # Build a temp file mapping `filepath<TAB>STATUS` so the numstat loop below
+  # can annotate each entry. We use a temp file instead of a bash associative
+  # array for portability (bash 3 on macOS, the while-read subshell, etc).
+  local status_file
+  status_file=$(mktemp)
+  # shellcheck disable=SC2064
+  trap "rm -f '$status_file'" RETURN
+
+  git diff --name-status "$base_ref...$head_ref" 2>/dev/null | \
+    while IFS=$'\t' read -r status_code path_a path_b; do
+      local status_label=""
+      local display_path="$path_a"
+      case "$status_code" in
+        A)   status_label="ADDED" ;;
+        M)   status_label="MODIFIED" ;;
+        D)   status_label="DELETED" ;;
+        T)   status_label="TYPE-CHANGED" ;;
+        R*)  status_label="RENAMED from $path_a"; display_path="$path_b" ;;
+        C*)  status_label="COPIED from $path_a"; display_path="$path_b" ;;
+        *)   status_label="CHANGED" ;;
+      esac
+      printf '%s\t%s\n' "$display_path" "$status_label" >> "$status_file"
+    done
+
+  # Helper to look up a file's status; defaults to "CHANGED" if not found.
+  lookup_status() {
+    local needle="$1"
+    local line
+    line=$(grep -F -m 1 $'\t' <(awk -F'\t' -v p="$needle" '$1==p {print}' "$status_file"))
+    if [ -n "$line" ]; then
+      echo "$line" | cut -f2-
+    else
+      echo "CHANGED"
+    fi
+  }
+
   echo "## 📋 Changed Files Summary"
   echo ""
   echo "**Total files changed**: $file_count"
   echo ""
   echo "**Instructions for Validation:**"
   echo "1. Review the list below to understand what changed"
-  echo "2. Read specific files using: \`cat path/to/file.ts\`"
-  echo "3. Check related files when needed (imports, configs, etc.)"
-  echo "4. Focus validation on the modified line ranges shown"
+  echo "2. Each file is annotated with its **Status** (ADDED / MODIFIED / DELETED / RENAMED)"
+  echo "3. **Read** files with Status ADDED, MODIFIED, RENAMED, or TYPE-CHANGED using: \`cat path/to/file.ts\`"
+  echo "4. **DO NOT** try to read files with Status DELETED — they no longer exist in the working tree. If your read fails with 'File not found', stop retrying and trust the status annotation."
+  echo "5. Check related files when needed (imports, configs, etc.)"
+  echo "6. Focus validation on the modified line ranges shown"
   echo ""
   echo "---"
   echo ""
-  
+
   # Get list of changed files with their change stats
   git diff --numstat "$base_ref...$head_ref" 2>/dev/null | while read -r additions deletions filepath; do
     # Skip if filepath is empty
     [ -z "$filepath" ] && continue
-    
+
+    # numstat uses "old => new" notation for renames; peel off the new path
+    # so the status lookup matches what name-status emitted.
+    case "$filepath" in
+      *" => "*)
+        filepath=$(printf '%s' "$filepath" | sed -E 's/.*=> *//' | tr -d '{}')
+        ;;
+    esac
+
+    local file_status
+    file_status=$(lookup_status "$filepath")
+
     echo "### \`$filepath\`"
-    
+    echo "- **Status**: $file_status"
+
     # Handle binary files (shown as "-" in numstat)
     if [ "$additions" = "-" ]; then
       echo "- **Type**: Binary file"
     else
       echo "- **Changes**: +${additions} lines, -${deletions} lines"
-      
-      # Get the line ranges that changed (unified diff format gives us @@ markers)
-      # -U0 means no context, just the changed lines
-      local line_ranges
-      line_ranges=$(git diff -U0 "$base_ref...$head_ref" -- "$filepath" 2>/dev/null | \
-        grep "^@@" | \
-        sed 's/@@ -[0-9,]* +\([0-9,]*\) @@.*/Line \1/' | \
-        head -10 | \
-        tr '\n' ', ' | \
-        sed 's/, $//')
-      
-      if [ -n "$line_ranges" ]; then
-        echo "- **Modified ranges**: $line_ranges"
+
+      if [ "$file_status" = "DELETED" ]; then
+        echo "- **Note**: File was deleted — do NOT attempt to read it. Inspect the diff below (or \`git show HEAD^:$filepath\`) if you need to see its former contents."
+      else
+        # Get the line ranges that changed (unified diff format gives us @@ markers)
+        # -U0 means no context, just the changed lines
+        local line_ranges
+        line_ranges=$(git diff -U0 "$base_ref...$head_ref" -- "$filepath" 2>/dev/null | \
+          grep "^@@" | \
+          sed 's/@@ -[0-9,]* +\([0-9,]*\) @@.*/Line \1/' | \
+          head -10 | \
+          tr '\n' ', ' | \
+          sed 's/, $//')
+
+        if [ -n "$line_ranges" ]; then
+          echo "- **Modified ranges**: $line_ranges"
+        fi
       fi
     fi
     echo ""
@@ -323,9 +382,13 @@ run_gemini() {
       # Error details are shown above in the output
       echo "⚠️ Check the output above for error details"
       
-      # Check if it's a retryable error
+      # Check if it's a retryable error. Includes transient upstream provider
+      # failures (OpenRouter 504/530, generic "Provider returned error",
+      # connection resets) in addition to the classic rate-limit signals, so
+      # flaky LLM backends don't burn the whole validation run.
       local is_retryable=false
-      if [ -f /tmp/validation-full-output.md ] && grep -q -E "(429|503|timeout|rate limit)" /tmp/validation-full-output.md; then
+      if [ -f /tmp/validation-full-output.md ] && \
+         grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" /tmp/validation-full-output.md; then
         is_retryable=true
       fi
       
@@ -403,9 +466,13 @@ run_opencode() {
 
       echo "⚠️ Check the output above for error details"
 
-      # Check if it's a retryable error
+      # Check if it's a retryable error. Includes transient upstream provider
+      # failures (OpenRouter 504/530, generic "Provider returned error",
+      # connection resets) in addition to the classic rate-limit signals, so
+      # flaky LLM backends don't burn the whole validation run.
       local is_retryable=false
-      if [ -f /tmp/validation-full-output.md ] && grep -q -E "(429|503|timeout|rate limit)" /tmp/validation-full-output.md; then
+      if [ -f /tmp/validation-full-output.md ] && \
+         grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" /tmp/validation-full-output.md; then
         is_retryable=true
       fi
 
