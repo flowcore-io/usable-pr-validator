@@ -414,17 +414,20 @@ run_gemini() {
   return 1
 }
 
-# Run OpenCode validation with retry logic
+# Run OpenCode validation with retry logic.
+# Args: $1 prompt file, $2 opencode-provider (optional, defaults to OPENCODE_PROVIDER),
+#       $3 model id (optional, defaults to OPENCODE_MODEL).
+# Returns: 0 success | 1 non-retryable failure | 2 retryable failure with retries exhausted (caller may fallback).
 run_opencode() {
   local prompt_file="$1"
+  local opencode_provider="${2:-${OPENCODE_PROVIDER:-openrouter}}"
+  local model="${3:-${OPENCODE_MODEL:-moonshotai/kimi-k2.5}}"
   local retry_count=0
   local max_retries="${MAX_RETRIES:-2}"
-  local opencode_provider="${OPENCODE_PROVIDER:-openrouter}"
-  local model="${OPENCODE_MODEL:-moonshotai/kimi-k2.5}"
   local full_model="${opencode_provider}/${model}"
 
   while [ $retry_count -le "$max_retries" ]; do
-    echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running OpenCode validation..."
+    echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running OpenCode validation (${full_model})..."
 
     # Debug: Check prompt file
     if [ ! -f "$prompt_file" ]; then
@@ -484,18 +487,18 @@ run_opencode() {
           echo "⏳ Rate limit or timeout detected. Retrying after ${wait_time} seconds..."
           sleep $wait_time
         else
-          echo "::error::Maximum retries reached. Validation failed."
-          return 1
+          echo "::error::Maximum retries reached. Validation failed (retryable)."
+          return 2
         fi
       else
-        # Non-retryable error
+        # Non-retryable error — caller should NOT fall back to a different provider.
         echo "::error::Non-retryable error occurred. See error details above."
         return 1
       fi
     fi
   done
 
-  return 1
+  return 2
 }
 
 # Extract validation report from AI output
@@ -634,17 +637,29 @@ main() {
   
   echo "Prompt prepared: $prompt_with_replacements"
   
-  # Run validation with the configured provider
+  # Run validation with the configured provider.
+  # Use `|| rc=$?` (not `set +e`) because run_opencode/run_gemini toggle errexit
+  # internally to capture the CLI's exit code, which clobbers any outer set +e.
   local provider="${PROVIDER:-opencode}"
+  local rc=0
   if [ "$provider" = "opencode" ]; then
-    run_func="run_opencode"
+    run_opencode "$prompt_with_replacements" "${OPENCODE_PROVIDER:-}" "${OPENCODE_MODEL:-}" || rc=$?
+
+    # Fallback: only when primary exhausted retries on retryable errors (rc=2)
+    # AND a fallback opencode-provider is configured. Non-retryable failures (rc=1)
+    # bypass fallback because switching providers won't fix a malformed prompt/auth.
+    if [ "$rc" -eq 2 ] && [ -n "${FALLBACK_OPENCODE_PROVIDER:-}" ] && [ -n "${FALLBACK_OPENCODE_MODEL:-}" ]; then
+      echo "::warning::Primary opencode/${OPENCODE_PROVIDER:-}/${OPENCODE_MODEL:-} exhausted retries on retryable errors. Falling back to ${FALLBACK_OPENCODE_PROVIDER}/${FALLBACK_OPENCODE_MODEL}."
+      rc=0
+      run_opencode "$prompt_with_replacements" "${FALLBACK_OPENCODE_PROVIDER}" "${FALLBACK_OPENCODE_MODEL}" || rc=$?
+    fi
   else
-    run_func="run_gemini"
+    run_gemini "$prompt_with_replacements" || rc=$?
   fi
 
-  if ! $run_func "$prompt_with_replacements"; then
+  if [ "$rc" -ne 0 ]; then
     echo "::error::Validation execution failed"
-    
+
     # Set failed outputs using heredoc delimiter
     if [ -n "${GITHUB_OUTPUT:-}" ]; then
       {
@@ -658,7 +673,7 @@ main() {
         echo "0"
         echo "EOF"
       } >> "$GITHUB_OUTPUT"
-      
+
       echo "❌ Outputs set to error state"
     else
       echo "❌ Validation failed (local mode, no GITHUB_OUTPUT)"

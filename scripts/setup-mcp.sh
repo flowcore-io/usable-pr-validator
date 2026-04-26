@@ -27,12 +27,21 @@ if [ -z "$MCP_URL" ]; then
 fi
 
 if [ "$PROVIDER" = "opencode" ]; then
+  # Build provider block — include fallback as a second enabled provider when configured
+  # so opencode can route to it via `-m <fallback-provider>/<fallback-model>` without re-config.
+  FALLBACK_OPENCODE_PROVIDER="${FALLBACK_OPENCODE_PROVIDER:-}"
+  if [ -n "$FALLBACK_OPENCODE_PROVIDER" ] && [ "$FALLBACK_OPENCODE_PROVIDER" != "$OPENCODE_PROVIDER" ]; then
+    PROVIDER_BLOCK="\"${OPENCODE_PROVIDER}\": {}, \"${FALLBACK_OPENCODE_PROVIDER}\": {}"
+  else
+    PROVIDER_BLOCK="\"${OPENCODE_PROVIDER}\": {}"
+  fi
+
   # Create OpenCode configuration with MCP and provider settings
   cat > /tmp/opencode.json <<EOF
 {
   "\$schema": "https://opencode.ai/config.json",
   "provider": {
-    "${OPENCODE_PROVIDER}": {}
+    ${PROVIDER_BLOCK}
   },
   "model": "${OPENCODE_PROVIDER}/${OPENCODE_MODEL}",
   "autoupdate": false,
@@ -60,6 +69,9 @@ EOF
   echo "✅ OpenCode MCP server configured"
   echo "  URL: $MCP_URL"
   echo "  Model: ${OPENCODE_PROVIDER}/${OPENCODE_MODEL}"
+  if [ -n "$FALLBACK_OPENCODE_PROVIDER" ] && [ "$FALLBACK_OPENCODE_PROVIDER" != "$OPENCODE_PROVIDER" ]; then
+    echo "  Fallback provider enabled: ${FALLBACK_OPENCODE_PROVIDER}"
+  fi
   echo "  Settings file: ./opencode.json"
 
   # Debug: Show settings file content (mask token)
