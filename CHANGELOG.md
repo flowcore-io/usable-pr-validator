@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0](https://github.com/flowcore-io/usable-pr-validator/compare/v2.1.2...v2.2.0) (2026-04-26)
+
+
+### Features
+
+* opencode fallback provider + deleted-file annotation ([#31](https://github.com/flowcore-io/usable-pr-validator/issues/31)) ([d2e86a5](https://github.com/flowcore-io/usable-pr-validator/commit/d2e86a51967ee9c07a8ea37d89a75e71e50f71df))
+
 ## [2.1.2](https://github.com/flowcore-io/usable-pr-validator/compare/v2.1.1...v2.1.2) (2026-04-15)
 
 
