@@ -98,6 +98,18 @@ inputs:
     description: 'Name of secret containing the API key for the configured opencode-provider'
     required: false
     default: 'OPENCODE_API_KEY'
+  fallback-opencode-provider:
+    description: 'Optional opencode-provider to fall back to when primary exhausts retries on retryable errors (e.g. 429/503/504/timeout). Empty disables fallback.'
+    required: false
+    default: ''
+  fallback-opencode-model:
+    description: 'Model ID for the fallback opencode-provider (required when fallback-opencode-provider is set)'
+    required: false
+    default: ''
+  fallback-opencode-api-key-secret:
+    description: 'Name of secret holding the fallback API key. Optional when fallback-opencode-provider equals opencode-provider (primary key is reused). Required when providers differ.'
+    required: false
+    default: ''
 
 outputs:
   validation-status:
@@ -167,8 +179,32 @@ runs:
           exit 1
         fi
 
+        # Validate fallback opencode-provider configuration
+        FALLBACK_PROV="${{ inputs.fallback-opencode-provider }}"
+        if [ -n "$FALLBACK_PROV" ]; then
+          if [ "${{ inputs.provider }}" != "opencode" ]; then
+            echo "::error::fallback-opencode-provider is only supported when provider=opencode"
+            exit 1
+          fi
+          if [[ ! "$FALLBACK_PROV" =~ ^(openrouter|anthropic|openai)$ ]]; then
+            echo "::error::Invalid fallback-opencode-provider. Must be: openrouter, anthropic, or openai"
+            exit 1
+          fi
+          if [ -z "${{ inputs.fallback-opencode-model }}" ]; then
+            echo "::error::fallback-opencode-model is required when fallback-opencode-provider is set"
+            exit 1
+          fi
+          if [ "$FALLBACK_PROV" != "${{ inputs.opencode-provider }}" ] && [ -z "${{ inputs.fallback-opencode-api-key-secret }}" ]; then
+            echo "::error::fallback-opencode-api-key-secret is required when fallback-opencode-provider differs from opencode-provider"
+            exit 1
+          fi
+        fi
+
         echo "✅ All inputs validated successfully"
         echo "  Provider: ${{ inputs.provider }}"
+        if [ -n "$FALLBACK_PROV" ]; then
+          echo "  Fallback: ${FALLBACK_PROV}/${{ inputs.fallback-opencode-model }}"
+        fi
         echo "::endgroup::"
     
     - name: Set Artifact Name
@@ -202,6 +238,15 @@ runs:
       env:
         OPENCODE_PROVIDER: ${{ inputs.opencode-provider }}
         OPENCODE_SECRET_NAME: ${{ inputs.opencode-api-key-secret }}
+      run: |
+        ${{ github.action_path }}/scripts/setup-opencode.sh
+
+    - name: Setup OpenCode Fallback Auth
+      if: inputs.provider == 'opencode' && inputs.fallback-opencode-provider != '' && inputs.fallback-opencode-api-key-secret != ''
+      shell: bash
+      env:
+        OPENCODE_PROVIDER: ${{ inputs.fallback-opencode-provider }}
+        OPENCODE_SECRET_NAME: ${{ inputs.fallback-opencode-api-key-secret }}
       run: |
         ${{ github.action_path }}/scripts/setup-opencode.sh
 
@@ -326,6 +371,7 @@ runs:
         PROVIDER: ${{ inputs.provider }}
         OPENCODE_PROVIDER: ${{ inputs.opencode-provider }}
         OPENCODE_MODEL: ${{ inputs.opencode-model }}
+        FALLBACK_OPENCODE_PROVIDER: ${{ inputs.fallback-opencode-provider }}
       run: |
         ${{ github.action_path }}/scripts/setup-mcp.sh
     
@@ -352,6 +398,8 @@ runs:
         GEMINI_MODEL: ${{ inputs.gemini-model }}
         OPENCODE_PROVIDER: ${{ inputs.opencode-provider }}
         OPENCODE_MODEL: ${{ inputs.opencode-model }}
+        FALLBACK_OPENCODE_PROVIDER: ${{ inputs.fallback-opencode-provider }}
+        FALLBACK_OPENCODE_MODEL: ${{ inputs.fallback-opencode-model }}
         MAX_RETRIES: ${{ inputs.max-retries }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         PR_TITLE: ${{ github.event.pull_request.title }}
