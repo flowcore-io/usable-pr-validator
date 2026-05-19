@@ -126,7 +126,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: flowcore/usable-pr-validator@latest
+      - uses: flowcore-io/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/pr-validation.md'
           workspace-id: 'your-workspace-uuid'
@@ -267,7 +267,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 
 ```yaml
 # Dynamic user prompt from Usable
-- uses: flowcore/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@latest
   with:
     use-dynamic-prompts: true
     prompt-fragment-id: 'user-prompt-uuid'
@@ -277,7 +277,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 
 # Static user prompt file (most common)
-- uses: flowcore/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@latest
   with:
     prompt-file: '.github/prompts/pr-validation.md'
     workspace-id: 'your-workspace-uuid'
@@ -300,7 +300,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 ### Minimal Setup (OpenCode - default)
 
 ```yaml
-- uses: flowcore/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@latest
   with:
     prompt-file: '.github/prompts/validate.md'
     workspace-id: 'your-workspace-uuid'
@@ -312,7 +312,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 ### Using Gemini Instead
 
 ```yaml
-- uses: flowcore/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@latest
   with:
     prompt-file: '.github/prompts/validate.md'
     workspace-id: 'your-workspace-uuid'
@@ -325,7 +325,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 ### With Custom MCP Server
 
 ```yaml
-- uses: flowcore/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@latest
   with:
     prompt-file: '.github/prompts/validate.md'
     workspace-id: 'your-workspace-uuid'
@@ -339,7 +339,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 ### Advanced Configuration
 
 ```yaml
-- uses: flowcore/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@latest
   with:
     prompt-file: '.github/validation/standards.md'
     workspace-id: 'your-workspace-uuid'
@@ -370,7 +370,7 @@ jobs:
         with:
           fetch-depth: 0
       
-      - uses: flowcore/usable-pr-validator@latest
+      - uses: flowcore-io/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/backend-standards.md'
           workspace-id: 'your-workspace-uuid'
@@ -386,7 +386,7 @@ jobs:
         with:
           fetch-depth: 0
       
-      - uses: flowcore/usable-pr-validator@latest
+      - uses: flowcore-io/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/frontend-standards.md'
           workspace-id: 'your-workspace-uuid'
@@ -432,7 +432,7 @@ jobs:
             echo "Comparing against base branch: ${{ github.event.pull_request.base.ref }}"
           fi
       
-      - uses: flowcore/usable-pr-validator@latest
+      - uses: flowcore-io/usable-pr-validator@latest
         with:
           prompt-file: '.github/prompts/pr-validation.md'
           workspace-id: 'your-workspace-uuid'
@@ -525,7 +525,7 @@ Usable is a team knowledge base and memory system that stores your:
 3. **Configure Workflow**
 
   ```yaml
-  - uses: flowcore/usable-pr-validator@latest
+  - uses: flowcore-io/usable-pr-validator@latest
     with:
       prompt-file: '.github/prompts/pr-validation.md'
       workspace-id: 'your-workspace-uuid'
@@ -593,7 +593,7 @@ jobs:
       contains(github.event.comment.body, '@usable')
     
     # Use the reusable workflow - it handles everything!
-    uses: flowcore/usable-pr-validator/.github/workflows/comment-revalidation.yml@v1
+    uses: flowcore-io/usable-pr-validator/.github/workflows/comment-revalidation.yml@v1
     with:
       workspace-id: 'your-workspace-uuid'  # REQUIRED
       prompt-file: '.github/prompts/pr-validation.md'  # Optional
@@ -723,7 +723,7 @@ The `allow-web-fetch` input controls whether the AI can download external resour
 **Example of enabling**:
 
 ```yaml
-- uses: flowcore/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@latest
   with:
     prompt-file: '.github/prompts/validate-api-docs.md'
     allow-web-fetch: true  # Only enable when needed
@@ -978,13 +978,13 @@ This action follows [Semantic Versioning](https://semver.org/) and uses automate
 
 ```yaml
 # Latest stable release (recommended)
-- uses: flowcore/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@latest
 
 # Specific version (pinned)
-- uses: flowcore/usable-pr-validator@v1.0.0
+- uses: flowcore-io/usable-pr-validator@v1.0.0
 
 # Latest commit on main (not recommended for production)
-- uses: flowcore/usable-pr-validator@main
+- uses: flowcore-io/usable-pr-validator@main
 ```
 
 ### Version Strategy
@@ -1009,7 +1009,7 @@ All commits must follow [Conventional Commits](https://www.conventionalcommits.o
 ### Development Setup
 
 ```bash
-git clone https://github.com/flowcore/usable-pr-validator.git
+git clone https://github.com/flowcore-io/usable-pr-validator.git
 cd usable-pr-validator
 
 # Test locally (requires act)
@@ -1030,9 +1030,9 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## 📞 Support
 
-- 🐛 [Report a bug](https://github.com/flowcore/usable-pr-validator/issues)
-- 💡 [Request a feature](https://github.com/flowcore/usable-pr-validator/issues)
-- 💬 [Discussions](https://github.com/flowcore/usable-pr-validator/discussions)
+- 🐛 [Report a bug](https://github.com/flowcore-io/usable-pr-validator/issues)
+- 💡 [Request a feature](https://github.com/flowcore-io/usable-pr-validator/issues)
+- 💬 [Discussions](https://github.com/flowcore-io/usable-pr-validator/discussions)
 
 Made with ❤️ by [Flowcore](https://flowcore.io)
 
