@@ -360,9 +360,13 @@ run_gemini() {
     
     # Run Gemini CLI and capture output
     set +e  # Temporarily disable exit on error to capture exit code
-    
-    # Just use tee to show and save output - simple and effective
-    gemini -y -m "$GEMINI_MODEL" --prompt "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
+
+    # Feed the prompt via stdin, NOT as an argv argument. A large PR diff makes
+    # the prompt exceed the kernel's per-argument cap (MAX_ARG_STRLEN, 128KB on
+    # Linux) → "Argument list too long" (exit 126). gemini reads piped stdin as
+    # the prompt when stdin is not a TTY (cli/src/gemini.tsx). `--prompt` is also
+    # deprecated upstream. `set -o pipefail` keeps $? as gemini's exit code.
+    gemini -y -m "$GEMINI_MODEL" < "$prompt_file" 2>&1 | tee /tmp/validation-full-output.md
     local exit_code=$?
     
     set -e  # Re-enable exit on error
@@ -450,7 +454,12 @@ run_opencode() {
     # Run OpenCode CLI and capture output
     set +e  # Temporarily disable exit on error to capture exit code
 
-    opencode run -m "$full_model" "$(cat "$prompt_file")" 2>&1 | tee /tmp/validation-full-output.md
+    # Feed the prompt via stdin, NOT as an argv argument. A large PR diff makes
+    # the prompt exceed the kernel's per-argument cap (MAX_ARG_STRLEN, 128KB on
+    # Linux) → "Argument list too long" (exit 126). opencode reads piped stdin as
+    # the message when stdin is not a TTY (cli/cmd/run.ts). `set -o pipefail`
+    # keeps $? as opencode's exit code through the tee pipe.
+    opencode run -m "$full_model" < "$prompt_file" 2>&1 | tee /tmp/validation-full-output.md
     local exit_code=$?
 
     set -e  # Re-enable exit on error
