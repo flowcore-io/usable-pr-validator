@@ -734,6 +734,13 @@ The `allow-web-fetch` input controls whether the AI can download external resour
 
 ## 🐛 Troubleshooting
 
+### OpenCode installation is reproducible
+
+The action installs a pinned OpenCode CLI release through npm and verifies the
+reported version before validation starts. This avoids depending on an
+unverified remote installer archive and prevents transient CDN responses from
+being passed to `tar`. Consumers do not need to install OpenCode themselves.
+
 ### No Output from AI CLI
 
 **Symptom**: GitHub Action runs but shows no AI output or errors
@@ -1035,4 +1042,3 @@ MIT License - see [LICENSE](LICENSE) for details.
 - 💬 [Discussions](https://github.com/flowcore-io/usable-pr-validator/discussions)
 
 Made with ❤️ by [Flowcore](https://flowcore.io)
-

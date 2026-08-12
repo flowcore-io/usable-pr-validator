@@ -80,6 +80,9 @@ jobs:
             echo "✅ $script syntax is valid"
           done
 
+      - name: Test Pinned OpenCode Installation
+        run: scripts/test-setup-opencode.sh
+
   test-templates:
     name: Validate Templates
     runs-on: ubuntu-latest

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 OPENCODE_PROVIDER="${OPENCODE_PROVIDER:-openrouter}"
+OPENCODE_VERSION="${OPENCODE_VERSION:-1.18.17}"
 
 echo "::group::Setting up OpenCode CLI + ${OPENCODE_PROVIDER}"
 
@@ -15,34 +16,34 @@ if [ -z "$SECRET_VALUE" ]; then
   exit 1
 fi
 
-# Install OpenCode CLI
-echo "Installing OpenCode CLI..."
-if ! command -v opencode &> /dev/null; then
-  curl -fsSL https://opencode.ai/install | bash
-
-  # The installer puts opencode in ~/.opencode/bin and updates .bashrc,
-  # but PATH changes from .bashrc don't apply to the current shell.
-  # Add known install locations to PATH for this session.
-  for dir in "$HOME/.opencode/bin" "$HOME/.local/bin"; do
-    if [ -f "$dir/opencode" ]; then
-      export PATH="$dir:$PATH"
-      # Also ensure subsequent steps have it (installer may already do this for GITHUB_PATH)
-      if [ -n "${GITHUB_PATH:-}" ]; then
-        echo "$dir" >> "$GITHUB_PATH"
-      fi
-      break
-    fi
-  done
-
-  if ! command -v opencode &> /dev/null; then
-    echo "::error::OpenCode CLI installation failed - command not found after install"
-    echo "Searched: ~/.opencode/bin, ~/.local/bin"
-    echo "PATH: $PATH"
-    exit 1
-  fi
+# Install an exact OpenCode version through npm. The previous remote install
+# script downloaded a release archive without verifying its content, so a CDN
+# error page could be piped into tar and fail with "not in gzip format".
+installed_version=""
+if command -v opencode &> /dev/null; then
+  installed_version="$(opencode --version 2>/dev/null || true)"
+  installed_version="${installed_version#v}"
 fi
 
-echo "✅ OpenCode CLI installed: $(opencode --version 2>/dev/null || echo 'version unknown')"
+if [ "$installed_version" != "$OPENCODE_VERSION" ]; then
+  echo "Installing OpenCode CLI ${OPENCODE_VERSION} with npm..."
+  npm install --global --no-audit --no-fund "opencode-ai@${OPENCODE_VERSION}"
+fi
+
+if ! command -v opencode &> /dev/null; then
+  echo "::error::OpenCode CLI installation failed - command not found after npm install"
+  echo "PATH: $PATH"
+  exit 1
+fi
+
+installed_version="$(opencode --version 2>/dev/null || true)"
+installed_version="${installed_version#v}"
+if [ "$installed_version" != "$OPENCODE_VERSION" ]; then
+  echo "::error::OpenCode CLI version mismatch: expected ${OPENCODE_VERSION}, got ${installed_version:-unknown}"
+  exit 1
+fi
+
+echo "✅ OpenCode CLI installed: ${installed_version}"
 
 # Determine the correct env var name for the provider
 # OpenCode expects provider-specific env vars (e.g., OPENROUTER_API_KEY, ANTHROPIC_API_KEY)
