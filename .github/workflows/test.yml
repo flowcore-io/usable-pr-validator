@@ -83,6 +83,12 @@ jobs:
       - name: Test Pinned OpenCode Installation
         run: scripts/test-setup-opencode.sh
 
+      - name: Test Composite Action Dependencies
+        run: scripts/test-action-dependencies.sh
+
+      - name: Test Shared Release Rollout Policy
+        run: scripts/test-release-rollout-policy.sh
+
   test-templates:
     name: Validate Templates
     runs-on: ubuntu-latest

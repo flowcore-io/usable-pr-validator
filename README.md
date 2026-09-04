@@ -984,11 +984,14 @@ This action follows [Semantic Versioning](https://semver.org/) and uses automate
 ### Using Specific Versions
 
 ```yaml
-# Latest stable release (recommended)
+# Moving alias (promoted only after cross-repository canaries)
 - uses: flowcore-io/usable-pr-validator@latest
 
-# Specific version (pinned)
-- uses: flowcore-io/usable-pr-validator@v1.0.0
+# Specific reviewed version (recommended minimum)
+- uses: flowcore-io/usable-pr-validator@v2.2.3
+
+# Exact reviewed commit (strongest supply-chain binding)
+- uses: flowcore-io/usable-pr-validator@c7b3f40a80c6799bd5be2b9fcb1c414aeac4e44e
 
 # Latest commit on main (not recommended for production)
 - uses: flowcore-io/usable-pr-validator@main
@@ -1000,7 +1003,12 @@ This action follows [Semantic Versioning](https://semver.org/) and uses automate
 - **Minor (v1.0.x → v1.1.x)**: New features, backward compatible
 - **Patch (v1.0.0 → v1.0.1)**: Bug fixes, backward compatible
 
-We recommend using `@latest` to automatically receive the newest stable release.
+Prefer an exact reviewed commit SHA, or an exact version when centralized update
+automation is required. Publishing a version does not move `latest` automatically.
+After representative consumer canaries pass, a maintainer must dispatch **Promote
+latest validator alias** with the exact stable version and approve its protected
+`validator-rollout` environment. This keeps moving-alias consumers on their last
+approved validator until the company-wide rollout is deliberate.
 
 ## 🤝 Contributing
 

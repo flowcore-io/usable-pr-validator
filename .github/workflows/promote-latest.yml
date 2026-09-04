@@ -1,0 +1,65 @@
+name: Promote latest validator alias
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Exact published stable version to promote, for example v2.2.4
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: validator-latest-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Promote approved release to latest
+    environment: validator-rollout
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout release history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Validate exact published stable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::release_tag must be an exact stable vMAJOR.MINOR.PATCH tag"
+            exit 1
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" \
+            | jq -e \
+              --arg tag "$RELEASE_TAG" \
+              '.tag_name == $tag and .draft == false and .prerelease == false and (.published_at | type == "string")' \
+              >/dev/null
+          git fetch --force origin \
+            "refs/heads/main:refs/remotes/origin/main" \
+            "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          release_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          git merge-base --is-ancestor "$release_sha" refs/remotes/origin/main
+
+      - name: Move latest after protected approval
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag --force --annotate latest "$release_sha" \
+            --message "Promote latest to ${RELEASE_TAG} after validator canary approval"
+          git push origin refs/tags/latest --force
+          remote_sha="$(git ls-remote origin 'refs/tags/latest^{}' | awk 'NR == 1 {print $1}')"
+          test "$remote_sha" = "$release_sha"
