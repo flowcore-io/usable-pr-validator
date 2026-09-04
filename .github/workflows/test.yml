@@ -86,6 +86,9 @@ jobs:
       - name: Test Composite Action Dependencies
         run: scripts/test-action-dependencies.sh
 
+      - name: Test Shared Release Rollout Policy
+        run: scripts/test-release-rollout-policy.sh
+
   test-templates:
     name: Validate Templates
     runs-on: ubuntu-latest
