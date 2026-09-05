@@ -123,4 +123,13 @@ if grep -F -q '          ${{ needs.check-trigger.outputs.comment-body }}' "$REVA
   fail 'untrusted comment body must not be interpolated into a shell script'
 fi
 
+opencode_alias_count=$(grep -F -c 'OPENCODE_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}' "$TEST_WORKFLOW" || true)
+if [ "$opencode_alias_count" -ne 3 ]; then
+  fail "expected three integration jobs to alias OPENROUTER_API_KEY, found $opencode_alias_count"
+fi
+
+if grep -F -q 'OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}' "$TEST_WORKFLOW"; then
+  fail 'integration tests reference the nonexistent OPENCODE_API_KEY secret'
+fi
+
 echo 'Workflow actions, release credentials, and executable downloads satisfy the immutable dependency policy.'
