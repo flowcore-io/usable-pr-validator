@@ -257,7 +257,7 @@ jobs:
             if [ -z "$LAST_TAG" ]; then
               echo "base-ref=$BASE_REF" >> "$GITHUB_OUTPUT"
             else
-              echo "base-ref=$LAST_TAG" >> $GITHUB_OUTPUT
+              echo "base-ref=$LAST_TAG" >> "$GITHUB_OUTPUT"
             fi
           else
             # For regular PRs, use the base branch
@@ -396,7 +396,7 @@ jobs:
             if [ -z "$LAST_TAG" ]; then
               echo "base-ref=$BASE_REF" >> "$GITHUB_OUTPUT"
             else
-              echo "base-ref=$LAST_TAG" >> $GITHUB_OUTPUT
+              echo "base-ref=$LAST_TAG" >> "$GITHUB_OUTPUT"
             fi
           else
             # For regular PRs, use the base branch
@@ -518,7 +518,7 @@ jobs:
             if [ -z "$LAST_TAG" ]; then
               echo "base-ref=$BASE_REF" >> "$GITHUB_OUTPUT"
             else
-              echo "base-ref=$LAST_TAG" >> $GITHUB_OUTPUT
+              echo "base-ref=$LAST_TAG" >> "$GITHUB_OUTPUT"
             fi
           else
             # For regular PRs, use the base branch
@@ -597,7 +597,7 @@ jobs:
         id: override
         run: |
           # Simulate a user comment requesting deviation approval
-          cat <<'OVERRIDE_EOF' >> $GITHUB_OUTPUT
+          cat <<'OVERRIDE_EOF' >> "$GITHUB_OUTPUT"
           override-comment<<COMMENT_END
           @usable This PR is a test.
           

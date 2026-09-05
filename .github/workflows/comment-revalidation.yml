@@ -85,10 +85,10 @@ jobs:
         id: check
         run: |
           if [[ "${{ contains(github.event.comment.body, '@usable') }}" == "true" ]]; then
-            echo "should-validate=true" >> $GITHUB_OUTPUT
+            echo "should-validate=true" >> "$GITHUB_OUTPUT"
             echo "✅ Comment mentions @usable - will trigger validation"
           else
-            echo "should-validate=false" >> $GITHUB_OUTPUT
+            echo "should-validate=false" >> "$GITHUB_OUTPUT"
             echo "⏭️ Comment does not mention @usable - skipping"
           fi
       
