@@ -35,8 +35,10 @@ jobs:
       
       - name: Display Release Information
         if: ${{ steps.release.outputs.release_created }}
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: |
           echo "🎉 Release created!"
-          echo "Tag: ${{ steps.release.outputs.tag_name }}"
-          echo "Version: ${{ steps.release.outputs.version }}"
-          echo "Release PR: ${{ steps.release.outputs.pr }}"
+          echo "Tag: $RELEASE_TAG"
+          echo "Version: $RELEASE_VERSION"
