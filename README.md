@@ -122,11 +122,11 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - uses: flowcore-io/usable-pr-validator@latest
+      - uses: flowcore-io/usable-pr-validator@v2.2.4
         with:
           prompt-file: '.github/prompts/pr-validation.md'
           workspace-id: 'your-workspace-uuid'
@@ -267,7 +267,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 
 ```yaml
 # Dynamic user prompt from Usable
-- uses: flowcore-io/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@v2.2.4
   with:
     use-dynamic-prompts: true
     prompt-fragment-id: 'user-prompt-uuid'
@@ -277,7 +277,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
     USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
 
 # Static user prompt file (most common)
-- uses: flowcore-io/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@v2.2.4
   with:
     prompt-file: '.github/prompts/pr-validation.md'
     workspace-id: 'your-workspace-uuid'
@@ -300,7 +300,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 ### Minimal Setup (OpenCode - default)
 
 ```yaml
-- uses: flowcore-io/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@v2.2.4
   with:
     prompt-file: '.github/prompts/validate.md'
     workspace-id: 'your-workspace-uuid'
@@ -312,7 +312,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 ### Using Gemini Instead
 
 ```yaml
-- uses: flowcore-io/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@v2.2.4
   with:
     prompt-file: '.github/prompts/validate.md'
     workspace-id: 'your-workspace-uuid'
@@ -325,7 +325,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 ### With Custom MCP Server
 
 ```yaml
-- uses: flowcore-io/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@v2.2.4
   with:
     prompt-file: '.github/prompts/validate.md'
     workspace-id: 'your-workspace-uuid'
@@ -339,7 +339,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 ### Advanced Configuration
 
 ```yaml
-- uses: flowcore-io/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@v2.2.4
   with:
     prompt-file: '.github/validation/standards.md'
     workspace-id: 'your-workspace-uuid'
@@ -366,11 +366,11 @@ jobs:
   validate-backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       
-      - uses: flowcore-io/usable-pr-validator@latest
+      - uses: flowcore-io/usable-pr-validator@v2.2.4
         with:
           prompt-file: '.github/prompts/backend-standards.md'
           workspace-id: 'your-workspace-uuid'
@@ -382,11 +382,11 @@ jobs:
   validate-frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       
-      - uses: flowcore-io/usable-pr-validator@latest
+      - uses: flowcore-io/usable-pr-validator@v2.2.4
         with:
           prompt-file: '.github/prompts/frontend-standards.md'
           workspace-id: 'your-workspace-uuid'
@@ -413,7 +413,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       
@@ -432,7 +432,7 @@ jobs:
             echo "Comparing against base branch: ${{ github.event.pull_request.base.ref }}"
           fi
       
-      - uses: flowcore-io/usable-pr-validator@latest
+      - uses: flowcore-io/usable-pr-validator@v2.2.4
         with:
           prompt-file: '.github/prompts/pr-validation.md'
           workspace-id: 'your-workspace-uuid'
@@ -525,7 +525,7 @@ Usable is a team knowledge base and memory system that stores your:
 3. **Configure Workflow**
 
   ```yaml
-  - uses: flowcore-io/usable-pr-validator@latest
+  - uses: flowcore-io/usable-pr-validator@v2.2.4
     with:
       prompt-file: '.github/prompts/pr-validation.md'
       workspace-id: 'your-workspace-uuid'
@@ -593,7 +593,7 @@ jobs:
       contains(github.event.comment.body, '@usable')
     
     # Use the reusable workflow - it handles everything!
-    uses: flowcore-io/usable-pr-validator/.github/workflows/comment-revalidation.yml@v1
+    uses: flowcore-io/usable-pr-validator/.github/workflows/comment-revalidation.yml@v2.2.4
     with:
       workspace-id: 'your-workspace-uuid'  # REQUIRED
       prompt-file: '.github/prompts/pr-validation.md'  # Optional
@@ -723,7 +723,7 @@ The `allow-web-fetch` input controls whether the AI can download external resour
 **Example of enabling**:
 
 ```yaml
-- uses: flowcore-io/usable-pr-validator@latest
+- uses: flowcore-io/usable-pr-validator@v2.2.4
   with:
     prompt-file: '.github/prompts/validate-api-docs.md'
     allow-web-fetch: true  # Only enable when needed
@@ -781,7 +781,7 @@ Prompt size: XXXX bytes
 4. **Verify git refs are properly fetched**:
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   with:
     fetch-depth: 0  # Important: fetch full history
 ```
@@ -824,13 +824,13 @@ If you're checking out with a specific SHA, this creates a detached HEAD state t
 
 ```yaml
 # ❌ WRONG - Creates detached HEAD
-- uses: actions/checkout@v4
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   with:
     ref: ${{ github.event.pull_request.head.sha }}
     fetch-depth: 0
 
 # ✅ CORRECT - Let checkout handle the ref automatically
-- uses: actions/checkout@v4
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   with:
     fetch-depth: 0  # This is all you need for PRs
 ```
@@ -839,12 +839,12 @@ If you're checking out with a specific SHA, this creates a detached HEAD state t
 
 ```yaml
 # Option 1: Don't specify ref for PR workflows
-- uses: actions/checkout@v4
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   with:
     fetch-depth: 0
 
 # Option 2: Explicitly fetch both refs after checkout
-- uses: actions/checkout@v4
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   with:
     ref: ${{ github.event.pull_request.head.sha }}
     fetch-depth: 0
@@ -866,7 +866,7 @@ If you're checking out with a specific SHA, this creates a detached HEAD state t
 The action now automatically passes `workspace-id` to the MCP server via the `x-workspace-id` header. Ensure you're using the latest version:
 
 ```yaml
-- uses: flowcore-io/usable-pr-validator@v1.6.0  # or @latest
+- uses: flowcore-io/usable-pr-validator@v2.2.4
   with:
     workspace-id: '60c10ca2-4115-4c1a-b6d7-04ac39fd3938'  # Required!
 ```
@@ -984,14 +984,14 @@ This action follows [Semantic Versioning](https://semver.org/) and uses automate
 ### Using Specific Versions
 
 ```yaml
-# Moving alias (promoted only after cross-repository canaries)
+# Moving compatibility alias (use only when centrally managed)
 - uses: flowcore-io/usable-pr-validator@latest
 
-# Specific reviewed version (recommended minimum)
-- uses: flowcore-io/usable-pr-validator@v2.2.3
+# Specific provider-protected version (recommended)
+- uses: flowcore-io/usable-pr-validator@v2.2.4
 
-# Exact reviewed commit (strongest supply-chain binding)
-- uses: flowcore-io/usable-pr-validator@c7b3f40a80c6799bd5be2b9fcb1c414aeac4e44e
+# Exact reviewed commit (strongest supply-chain binding; substitute the reviewed SHA)
+- uses: flowcore-io/usable-pr-validator@<resolved-v2.2.4-commit-sha>
 
 # Latest commit on main (not recommended for production)
 - uses: flowcore-io/usable-pr-validator@main

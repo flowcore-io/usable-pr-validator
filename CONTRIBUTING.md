@@ -142,6 +142,11 @@ docs(readme): add troubleshooting section
 
 Releases are automated using [release-please](https://github.com/google-github-actions/release-please-action):
 
+The release workflow keeps its GitHub job token read-only and mints a short-lived token from the
+least-privilege **Flowcore Release Bot** GitHub App using `RELEASE_PLEASE_APP_CLIENT_ID` and
+`RELEASE_PLEASE_APP_PRIVATE_KEY`. Do not restore the legacy shared machine-user PAT. Release Please
+configuration stays at the repository root so the App does not need GitHub Workflows write access.
+
 ### How It Works
 
 1. **Commit with conventional commits** to `main` branch
@@ -159,6 +164,8 @@ Releases are automated using [release-please](https://github.com/google-github-a
    - Creates a GitHub release with tag (e.g., `v0.1.0`)
    - GitHub Marketplace **automatically** detects the tag and updates
    - Tag follows format: `v0.1.0`
+   - The stable tag and published release are immutable and must never be moved, deleted, or reused
+   - The release does **not** move `latest`; alias promotion is a separate protected workflow
 
 ### Initial Marketplace Setup (One-Time)
 
@@ -171,7 +178,9 @@ The action must be published to GitHub Marketplace initially:
 5. Fill in required marketplace details
 6. Publish release
 
-**After initial setup**, all future releases via release-please automatically update the marketplace listing.
+**After initial setup**, future stable releases update the Marketplace listing. The moving `latest`
+compatibility alias changes only through the protected **Promote latest validator alias** workflow
+after consumer canaries and independent environment approval.
 
 ### Manual Release Steps
 
@@ -181,6 +190,9 @@ If needed, maintainers can manually:
 2. Edit CHANGELOG.md if needed
 3. Merge the release PR
 4. GitHub Actions handles the rest
+
+If a published release is faulty, repair forward with a new patch. Never delete or recreate a stable
+version tag and never edit a provider-immutable release.
 
 ### Version Strategy
 
