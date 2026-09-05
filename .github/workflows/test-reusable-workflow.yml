@@ -73,7 +73,7 @@ jobs:
           
           **How Users Will Call It**:
           \`\`\`yaml
-          uses: flowcore/usable-pr-validator/.github/workflows/comment-revalidation.yml@v1
+          uses: flowcore-io/usable-pr-validator/.github/workflows/comment-revalidation.yml@c7b3f40a80c6799bd5be2b9fcb1c414aeac4e44e # v2.2.3
           with:
             workspace-id: 'their-workspace-uuid'
           secrets:
@@ -81,4 +81,3 @@ jobs:
             USABLE_API_TOKEN: \${{ secrets.USABLE_API_TOKEN }}
           \`\`\`
           EOF
-

@@ -97,14 +97,13 @@ jobs:
         env:
           COMMENT_TEXT: ${{ github.event.comment.body }}
         run: |
-          # Extract the comment body
-          echo "comment-body<<COMMENT_EOF" >> $GITHUB_OUTPUT
-          echo "$COMMENT_TEXT" >> $GITHUB_OUTPUT
-          echo "COMMENT_EOF" >> $GITHUB_OUTPUT
-          
-          echo "::group::Comment Content"
-          echo "$COMMENT_TEXT"
-          echo "::endgroup::"
+          delimiter="comment-$(openssl rand -hex 16)"
+          {
+            echo "comment-body<<${delimiter}"
+            printf '%s\n' "$COMMENT_TEXT"
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+          echo "Received @usable comment (${#COMMENT_TEXT} characters)"
 
   revalidate:
     name: Revalidate PR
@@ -117,7 +116,7 @@ jobs:
     steps:
       - name: Get PR details
         id: pr
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const pr = await github.rest.pulls.get({
@@ -135,32 +134,37 @@ jobs:
             core.info(`Head: ${pr.data.head.ref} (${pr.data.head.sha})`);
       
       - name: Checkout PR
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.pr.outputs.head-sha }}
           fetch-depth: 0
       
       - name: Determine validation base ref
         id: base-ref
+        env:
+          PR_BASE_REF: ${{ steps.pr.outputs.base-ref }}
+          PR_HEAD_REF: ${{ steps.pr.outputs.head-ref }}
         run: |
-          if [[ "${{ steps.pr.outputs.head-ref }}" == release-please--* ]]; then
+          if [[ "$PR_HEAD_REF" == release-please--* ]]; then
             # For release-please branches, validate since last release
             git fetch --tags
             LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
             if [ -z "$LAST_TAG" ]; then
-              echo "base-ref=${{ steps.pr.outputs.base-ref }}" >> $GITHUB_OUTPUT
+              echo "base-ref=$PR_BASE_REF" >> "$GITHUB_OUTPUT"
             else
-              echo "base-ref=$LAST_TAG" >> $GITHUB_OUTPUT
+              echo "base-ref=$LAST_TAG" >> "$GITHUB_OUTPUT"
             fi
           else
             # For regular PRs, use the base branch
-            echo "base-ref=${{ steps.pr.outputs.base-ref }}" >> $GITHUB_OUTPUT
+            echo "base-ref=$PR_BASE_REF" >> "$GITHUB_OUTPUT"
           fi
       
       - name: Create validation prompt
+        env:
+          OVERRIDE_COMMENT: ${{ needs.check-trigger.outputs.comment-body }}
         run: |
           mkdir -p .github/prompts
-          cat > .github/prompts/comment-revalidation.md <<'EOF'
+          cat > .github/prompts/comment-revalidation.md <<'PROMPT_HEADER'
           # PR Re-validation (Comment Triggered)
           
           ## CRITICAL OUTPUT INSTRUCTION
@@ -173,7 +177,9 @@ jobs:
           A user has requested revalidation with the following comment:
           
           ```
-          ${{ needs.check-trigger.outputs.comment-body }}
+          PROMPT_HEADER
+          printf '%s\n' "$OVERRIDE_COMMENT" >> .github/prompts/comment-revalidation.md
+          cat >> .github/prompts/comment-revalidation.md <<'PROMPT_BODY'
           ```
           
           **Important**: This comment may:
@@ -281,7 +287,7 @@ jobs:
           - **Critical Issues**: [count]
           - **Important Issues**: [count]
           - **Suggestions**: [count]
-          EOF
+          PROMPT_BODY
       
       - name: Run Revalidation
         uses: ./
@@ -306,7 +312,7 @@ jobs:
           COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
       
       - name: React to comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         if: always()
         with:
           script: |
@@ -316,4 +322,3 @@ jobs:
               comment_id: ${{ github.event.comment.id }},
               content: '👀'
             });
-
