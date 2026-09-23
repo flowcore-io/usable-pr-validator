@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.7](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.6...v2.2.7) (2026-09-23)
+
+
+### Bug Fixes
+
+* expose safe structured provider error metadata ([f4ce9f7](https://github.com/flowcore-io/usable-pr-validator/commit/f4ce9f76fec9191520c55ef61b5828207ca207a8))
+
 ## [2.2.6](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.5...v2.2.6) (2026-09-23)
 
 
