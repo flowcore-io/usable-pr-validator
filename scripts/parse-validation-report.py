@@ -76,8 +76,8 @@ def parse_report(text):
     critical_issues = int(critical_counts[0])
     if status == "PASS" and critical_issues != 0:
         raise ValueError("PASS cannot contain critical issues")
-    if status == "FAIL" and critical_issues == 0:
-        raise ValueError("FAIL must contain at least one critical issue")
+    # FAIL can reflect important findings or incomplete assessment without
+    # inventing a critical violation. Preserve the failed verdict verbatim.
     return {
         "status": "passed" if status == "PASS" else "failed",
         "passed": status == "PASS",

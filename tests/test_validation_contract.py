@@ -49,11 +49,17 @@ Validated.
         with self.assertRaises(ValueError):
             self.parser.parse_report("✅ Tool completed successfully\nStatus maybe PASS")
 
+    def test_failed_verdict_with_zero_critical_is_preserved(self):
+        report = "# PR Validation Report\n## Validation Outcome\n- **Status**: FAIL ❌\n- **Critical Issues**: 0\n- **Important Issues**: 1\n"
+        result = self.parser.parse_report(report)
+        self.assertEqual(result["status"], "failed")
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["critical_issues"], 0)
+
     def test_ambiguous_or_inconsistent_verdict_is_rejected(self):
         cases = [
             "# PR Validation Report\n## Validation Outcome\n- **Status**: PASS ✅\n- **Status**: FAIL ❌\n- **Critical Issues**: 1\n",
             "# PR Validation Report\n## Validation Outcome\n- **Status**: PASS ✅\n- **Critical Issues**: 2\n",
-            "# PR Validation Report\n## Validation Outcome\n- **Status**: FAIL ❌\n- **Critical Issues**: 0\n",
             "# PR Validation Report\n## Summary\nLooks good ✅\n",
         ]
         for report in cases:
