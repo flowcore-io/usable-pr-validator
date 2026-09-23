@@ -3,6 +3,7 @@ import io
 import json
 import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -27,6 +28,7 @@ class ValidationContractTests(unittest.TestCase):
         cls.enforcer = load("grounding_enforcer", "enforce-grounding-report.py")
         cls.prefetch = load("grounding_prefetch", "prefetch-usable-fragments.py")
         cls.reader = load("grounding_reader", "read-usable-fragment.py")
+        cls.extractor = load("provider_report_extractor", "extract-provider-report.py")
 
     def test_exact_structured_pass_is_accepted(self):
         report = """# PR Validation Report
@@ -99,8 +101,106 @@ Validated.
             }) + "\n")
             self.assertEqual(self.ledger.evaluate(required, ledger)["status"], "complete")
             required.write_text("")
-            ledger.write_text("")
+            attempt_id = "22222222-2222-4222-8222-222222222222"
+            ledger.write_text("".join(json.dumps(record) + "\n" for record in [
+                {
+                    "fragment_id": "11111111-1111-4111-8111-111111111111",
+                    "attempt_id": attempt_id,
+                    "status": "pending",
+                },
+                {
+                    "fragment_id": "11111111-1111-4111-8111-111111111111",
+                    "attempt_id": attempt_id,
+                    "status": "success",
+                },
+            ]))
             self.assertEqual(self.ledger.evaluate(required, ledger)["status"], "not-required")
+
+    def test_unfinished_attempt_keeps_grounding_incomplete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            required = Path(directory) / "required.txt"
+            ledger = Path(directory) / "ledger.jsonl"
+            required.write_text("a03af556-b85c-4073-8383-08ea7b2b3b8d\n")
+            records = [
+                {"fragment_id": "a03af556-b85c-4073-8383-08ea7b2b3b8d", "status": "success"},
+                {
+                    "fragment_id": "11111111-1111-4111-8111-111111111111",
+                    "attempt_id": "22222222-2222-4222-8222-222222222222",
+                    "status": "pending",
+                },
+            ]
+            ledger.write_text("".join(json.dumps(record) + "\n" for record in records))
+            result = self.ledger.evaluate(required, ledger)
+            self.assertEqual(result["status"], "incomplete")
+            self.assertEqual(result["failed_attempts"], ["11111111-1111-4111-8111-111111111111"])
+
+    def test_structured_provider_output_uses_only_final_assistant_answer(self):
+        private_sentinel = "PRIVATE_TOOL_SENTINEL"
+        tool_report = "# PR Validation Report\n## Validation Outcome\n- **Status**: PASS ✅\n- **Critical Issues**: 0"
+        final_answer = "I could not complete the review because required evidence was unavailable."
+        opencode_events = "\n".join([
+            json.dumps({
+                "type": "tool_use",
+                "part": {"type": "tool", "state": {"status": "completed", "output": tool_report + "\n" + private_sentinel}},
+            }),
+            json.dumps({"type": "text", "part": {"type": "text", "text": final_answer, "time": {"end": 1}}}),
+        ]) + "\n"
+        extracted = self.extractor.extract("opencode", opencode_events)
+        self.assertEqual(extracted, final_answer)
+        self.assertNotIn(private_sentinel, extracted)
+        with self.assertRaises(ValueError):
+            self.parser.parse_report(extracted)
+
+        gemini_output = json.dumps({"response": final_answer, "stats": {"models": {}}})
+        self.assertEqual(self.extractor.extract("gemini", gemini_output), final_answer)
+
+    def test_rejected_candidate_is_never_the_publishable_report(self):
+        validation = (ROOT / "scripts" / "validate.sh").read_text()
+        self.assertIn('mktemp /tmp/validation-report.candidate.XXXXXX', validation)
+        self.assertNotIn('sed -n \'/^# PR Validation Report$/,$p\' "$full_output" > "$report_file"', validation)
+        self.assertIn('mv -f "$candidate_file" /tmp/validation-report.md', validation)
+        self.assertIn('publish_safe_error_report', validation)
+
+    def test_orchestration_rejects_tool_pass_and_publishes_only_safe_error(self):
+        private_sentinel = "PRIVATE_TOOL_SENTINEL"
+        tool_report = "# PR Validation Report\n## Validation Outcome\n- **Status**: PASS ✅\n- **Critical Issues**: 0"
+        final_answer = "I could not complete the review."
+        events = "\n".join([
+            json.dumps({
+                "type": "tool_use",
+                "part": {"type": "tool", "state": {"status": "completed", "output": tool_report + "\n" + private_sentinel}},
+            }),
+            json.dumps({"type": "text", "part": {"type": "text", "text": final_answer, "time": {"end": 1}}}),
+        ]) + "\n"
+        report_path = Path("/tmp/validation-report.md")
+        report_path.unlink(missing_ok=True)
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                provider_output = Path(directory) / "opencode.jsonl"
+                candidate = Path(directory) / "candidate.md"
+                provider_output.write_text(events)
+                script = f'''set -euo pipefail
+export ACTION_PATH={ROOT!s}
+export VALIDATE_SH_LIBRARY_ONLY=true
+source {ROOT / "scripts" / "validate.sh"}
+if extract_report {provider_output!s} opencode {candidate!s}; then
+  exit 99
+fi
+rm -f {candidate!s}
+publish_safe_error_report "The final assistant response was invalid."
+'''
+                completed = subprocess.run(["bash", "-c", script], text=True, capture_output=True, check=False)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                published = report_path.read_text()
+                self.assertNotIn(private_sentinel, published)
+                self.assertNotIn(tool_report, published)
+                self.assertIn("Validation infrastructure failure", published)
+                self.assertEqual(
+                    self.parser.parse_report(published),
+                    {"status": "failed", "passed": False, "critical_issues": 1},
+                )
+        finally:
+            report_path.unlink(missing_ok=True)
 
     def test_prefetch_success_followed_by_malformed_extra_read_cannot_pass(self):
         fragment_id = "a03af556-b85c-4073-8383-08ea7b2b3b8d"
@@ -145,8 +245,8 @@ Validated.
         validation = (ROOT / "scripts" / "validate.sh").read_text()
         action = (ROOT / "action.yml").read_text()
         self.assertNotIn("| tee /tmp/validation-full-output.md", validation)
-        self.assertIn('gemini -y -m "$GEMINI_MODEL" < "$prompt_file" > /tmp/validation-full-output.md 2>&1', validation)
-        self.assertIn('opencode run -m "$full_model" < "$prompt_file" > /tmp/validation-full-output.md 2>&1', validation)
+        self.assertIn('gemini -y -m "$GEMINI_MODEL" --output-format json < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log', validation)
+        self.assertIn('opencode run --format json -m "$full_model" < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log', validation)
         self.assertGreaterEqual(validation.count("chmod 600 /tmp/validation-full-output.md"), 2)
         self.assertNotIn("Upload Full Output", action)
         self.assertNotIn("artifact_name }}-full", action)

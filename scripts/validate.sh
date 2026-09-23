@@ -8,6 +8,29 @@ GROUNDING_LEDGER="${USABLE_GROUNDING_LEDGER:-/tmp/usable-grounding-ledger.jsonl}
 REQUIRED_FRAGMENTS_FILE="${USABLE_REQUIRED_FRAGMENTS_FILE:-/tmp/usable-required-fragments.txt}"
 REQUIRED_GROUNDING_FILE="${USABLE_REQUIRED_GROUNDING_FILE:-/tmp/usable-required-grounding.md}"
 
+publish_safe_error_report() {
+  local summary="${1:-Validation failed before a publishable report was available.}"
+  local safe_file
+  safe_file=$(mktemp /tmp/validation-report.safe.XXXXXX)
+  chmod 600 "$safe_file"
+  cat > "$safe_file" <<EOF
+# PR Validation Report
+
+## Summary
+$summary
+
+## Critical Violations ❌
+- [ ] **Validation infrastructure failure**: No validated assistant report is available for publication.
+
+## Validation Outcome
+- **Status**: FAIL ❌
+- **Critical Issues**: 1
+- **Important Issues**: 0
+- **Suggestions**: 0
+EOF
+  mv -f "$safe_file" /tmp/validation-report.md
+}
+
 write_outputs() {
   local validation_status="$1"
   local validation_passed="$2"
@@ -417,8 +440,9 @@ run_gemini() {
     # deprecated upstream. Keep the provider transcript private: fragment bodies
     # and other grounding content must not be copied into the public job log.
     : > /tmp/validation-full-output.md
-    chmod 600 /tmp/validation-full-output.md
-    gemini -y -m "$GEMINI_MODEL" < "$prompt_file" > /tmp/validation-full-output.md 2>&1
+    : > /tmp/validation-provider-stderr.log
+    chmod 600 /tmp/validation-full-output.md /tmp/validation-provider-stderr.log
+    gemini -y -m "$GEMINI_MODEL" --output-format json < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log
     local exit_code=$?
     
     set -e  # Re-enable exit on error
@@ -442,8 +466,8 @@ run_gemini() {
       # connection resets) in addition to the classic rate-limit signals, so
       # flaky LLM backends don't burn the whole validation run.
       local is_retryable=false
-      if [ -f /tmp/validation-full-output.md ] && \
-         grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" /tmp/validation-full-output.md; then
+      if grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" \
+         /tmp/validation-full-output.md /tmp/validation-provider-stderr.log 2>/dev/null; then
         is_retryable=true
       fi
       
@@ -512,8 +536,9 @@ run_opencode() {
     # Keep the provider transcript private rather than teeing fragment bodies or
     # other model context into the public job log.
     : > /tmp/validation-full-output.md
-    chmod 600 /tmp/validation-full-output.md
-    opencode run -m "$full_model" < "$prompt_file" > /tmp/validation-full-output.md 2>&1
+    : > /tmp/validation-provider-stderr.log
+    chmod 600 /tmp/validation-full-output.md /tmp/validation-provider-stderr.log
+    opencode run --format json -m "$full_model" < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log
     local exit_code=$?
 
     set -e  # Re-enable exit on error
@@ -537,8 +562,8 @@ run_opencode() {
       # connection resets) in addition to the classic rate-limit signals, so
       # flaky LLM backends don't burn the whole validation run.
       local is_retryable=false
-      if [ -f /tmp/validation-full-output.md ] && \
-         grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" /tmp/validation-full-output.md; then
+      if grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" \
+         /tmp/validation-full-output.md /tmp/validation-provider-stderr.log 2>/dev/null; then
         is_retryable=true
       fi
 
@@ -567,22 +592,21 @@ run_opencode() {
 # Extract validation report from AI output
 extract_report() {
   local full_output="$1"
-  local report_file="/tmp/validation-report.md"
+  local provider="$2"
+  local candidate_file="$3"
   
   if [ ! -f "$full_output" ]; then
     echo "::error::Full output file does not exist: $full_output"
     return 1
   fi
 
-  local marker_count
-  marker_count=$(grep -c '^# PR Validation Report$' "$full_output" || true)
-  if [ "$marker_count" -ne 1 ]; then
-    echo "::error::Expected exactly one structured PR Validation Report, found $marker_count"
+  if ! "$SCRIPT_DIR/scripts/extract-provider-report.py" \
+      --provider "$provider" "$full_output" > "$candidate_file"; then
+    echo "::error::Could not isolate the final assistant response from provider output"
     return 1
   fi
 
-  sed -n '/^# PR Validation Report$/,$p' "$full_output" > "$report_file"
-  if ! "$SCRIPT_DIR/scripts/parse-validation-report.py" "$report_file" >/dev/null; then
+  if ! "$SCRIPT_DIR/scripts/parse-validation-report.py" "$candidate_file" >/dev/null; then
     echo "::error::AI output did not contain a valid structured final verdict"
     return 1
   fi
@@ -605,6 +629,7 @@ parse_results() {
 # Main execution
 main() {
   local grounding_json grounding_rc=0 grounding_status
+  rm -f /tmp/validation-report.md /tmp/validation-report.candidate.* /tmp/validation-report.safe.*
   grounding_json=$(grounding_result) || grounding_rc=$?
   if [ "$grounding_rc" -eq 2 ]; then
     echo "::error::Grounding ledger is malformed"
@@ -690,6 +715,7 @@ EOF
   if [ "$rc" -ne 0 ]; then
     echo "::error::Validation execution failed"
 
+    publish_safe_error_report "Validation execution failed before a valid final assistant report was available."
     write_outputs "error" "false" "0" "$grounding_status"
     echo "❌ Outputs set to error state"
     exit 1
@@ -702,10 +728,16 @@ EOF
     echo "✅ Full output file exists ($(wc -l < /tmp/validation-full-output.md) lines)"
   else
     echo "::error::Full output file does not exist!"
+    publish_safe_error_report "The provider did not produce structured output for validation."
     exit 1
   fi
-  
-  if ! extract_report "/tmp/validation-full-output.md"; then
+
+  local candidate_file
+  candidate_file=$(mktemp /tmp/validation-report.candidate.XXXXXX)
+  chmod 600 "$candidate_file"
+  if ! extract_report "/tmp/validation-full-output.md" "$provider" "$candidate_file"; then
+    rm -f "$candidate_file"
+    publish_safe_error_report "The provider completed, but its final assistant response was not a valid validation report."
     echo "::error::Failed to extract validation report"
     write_outputs "error" "false" "0" "$grounding_status"
     echo "::endgroup::"
@@ -717,15 +749,29 @@ EOF
   grounding_json=$(grounding_result) || grounding_rc=$?
   if [ "$grounding_rc" -eq 2 ]; then
     echo "::error::Grounding ledger is malformed after validation"
+    rm -f "$candidate_file"
+    publish_safe_error_report "The grounding ledger became invalid after provider execution."
     write_outputs "error" "false" "0" "incomplete"
     exit 1
   fi
   grounding_status=$(json_field "$grounding_json" status)
-  "$SCRIPT_DIR/scripts/enforce-grounding-report.py" /tmp/validation-report.md \
+  if ! "$SCRIPT_DIR/scripts/enforce-grounding-report.py" "$candidate_file" \
     --status "$grounding_status" \
     --required-count "$(json_field "$grounding_json" required_count)" \
     --missing-count "$(json_field "$grounding_json" missing_required)" \
-    --failed-count "$(json_field "$grounding_json" failed_attempts)"
+    --failed-count "$(json_field "$grounding_json" failed_attempts)"; then
+    rm -f "$candidate_file"
+    publish_safe_error_report "The assistant report could not be safely combined with the action-owned grounding result."
+    write_outputs "error" "false" "0" "$grounding_status"
+    exit 1
+  fi
+  if ! "$SCRIPT_DIR/scripts/parse-validation-report.py" "$candidate_file" >/dev/null; then
+    rm -f "$candidate_file"
+    publish_safe_error_report "The grounded assistant report failed final validation and was not published."
+    write_outputs "error" "false" "0" "$grounding_status"
+    exit 1
+  fi
+  mv -f "$candidate_file" /tmp/validation-report.md
   
   # Parse results and set outputs
   echo "Parsing validation results..."
@@ -770,6 +816,8 @@ EOF
   echo "::endgroup::"
 }
 
-# Run main function
-main
+# Run main function unless sourced by the contract tests.
+if [ "${VALIDATE_SH_LIBRARY_ONLY:-false}" != "true" ]; then
+  main
+fi
 

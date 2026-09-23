@@ -36,12 +36,17 @@ def _records(path):
             raise ValueError("grounding ledger contains malformed JSON") from exc
         fragment_id = record.get("fragment_id") if isinstance(record, dict) else None
         status = record.get("status") if isinstance(record, dict) else None
-        if not isinstance(fragment_id, str) or status not in {"success", "failed"}:
+        attempt_id = record.get("attempt_id") if isinstance(record, dict) else None
+        if not isinstance(fragment_id, str) or status not in {"pending", "success", "failed"}:
             raise ValueError("grounding ledger contains an invalid record")
         valid_identity = UUID_PATTERN.fullmatch(fragment_id) or (status == "failed" and fragment_id == "invalid-input")
         if not valid_identity:
             raise ValueError("grounding ledger contains an invalid record")
-        records.append({"fragment_id": fragment_id.lower(), "status": status})
+        if attempt_id is not None and (not isinstance(attempt_id, str) or not UUID_PATTERN.fullmatch(attempt_id)):
+            raise ValueError("grounding ledger contains an invalid attempt ID")
+        if status == "pending" and attempt_id is None:
+            raise ValueError("pending grounding record has no attempt ID")
+        records.append({"fragment_id": fragment_id.lower(), "status": status, "attempt_id": attempt_id})
     return records
 
 
@@ -49,12 +54,25 @@ def evaluate(required_path, ledger_path):
     required = _required(required_path)
     records = _records(ledger_path)
     successful = {record["fragment_id"] for record in records if record["status"] == "success"}
-    failed = sorted({record["fragment_id"] for record in records if record["status"] == "failed"})
+    completed_attempts = {
+        (record["attempt_id"], record["fragment_id"])
+        for record in records
+        if record["attempt_id"] is not None and record["status"] in {"success", "failed"}
+    }
+    unresolved = {
+        record["fragment_id"]
+        for record in records
+        if record["status"] == "pending"
+        and (record["attempt_id"], record["fragment_id"]) not in completed_attempts
+    }
+    failed = sorted(
+        {record["fragment_id"] for record in records if record["status"] == "failed"} | unresolved
+    )
     missing = sorted(set(required) - successful)
-    if not required and not records:
-        status = "not-required"
-    elif missing or failed:
+    if missing or failed:
         status = "incomplete"
+    elif not required:
+        status = "not-required"
     else:
         status = "complete"
     return {

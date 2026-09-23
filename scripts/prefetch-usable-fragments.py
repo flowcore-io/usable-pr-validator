@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import uuid
 
 SCRIPT = Path(__file__).with_name("read-usable-fragment.py")
 spec = importlib.util.spec_from_file_location("usable_fragment_reader", SCRIPT)
@@ -49,14 +50,16 @@ def main(argv=None):
     sections = []
     token = reader.configured_token()
     for fragment_id in fragment_ids:
+        attempt_id = str(uuid.uuid4())
+        reader.append_ledger(args.ledger, fragment_id, "pending", attempt_id=attempt_id)
         try:
             fragment = reader.read_fragment(fragment_id, token, args.workspace_id)
         except (ValueError, reader.FragmentReadError) as exc:
             code = exc.code if isinstance(exc, reader.FragmentReadError) else "validation_error"
-            reader.append_ledger(args.ledger, fragment_id, "failed", code)
+            reader.append_ledger(args.ledger, fragment_id, "failed", code, attempt_id=attempt_id)
             print(f"Required Usable fragment could not be retrieved: {fragment_id} ({code})", file=sys.stderr)
             return 1
-        reader.append_ledger(args.ledger, fragment_id, "success")
+        reader.append_ledger(args.ledger, fragment_id, "success", attempt_id=attempt_id)
         sections.append(
             "\n".join(
                 [

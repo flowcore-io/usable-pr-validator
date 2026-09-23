@@ -1,9 +1,11 @@
 import importlib.util
+import http.server
 import io
 import json
 import os
 from pathlib import Path
 import socket
+import threading
 import tempfile
 from contextlib import redirect_stderr
 from unittest import mock
@@ -15,6 +17,11 @@ spec = importlib.util.spec_from_file_location("reader", SCRIPT)
 assert spec is not None and spec.loader is not None
 reader = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(reader)
+LEDGER_SCRIPT = Path(__file__).parents[1] / "scripts" / "check-grounding-ledger.py"
+ledger_spec = importlib.util.spec_from_file_location("grounding_ledger", LEDGER_SCRIPT)
+assert ledger_spec is not None and ledger_spec.loader is not None
+grounding_ledger = importlib.util.module_from_spec(ledger_spec)
+ledger_spec.loader.exec_module(grounding_ledger)
 
 FRAGMENT_ID = "a03af556-b85c-4073-8383-08ea7b2b3b8d"
 WORKSPACE_ID = "f3c9feef-b8e6-4a23-bda0-0d90cd5162d1"
@@ -161,7 +168,9 @@ class FragmentReadTests(unittest.TestCase):
                 result = reader.main([FRAGMENT_ID])
             self.assertEqual(result, 1)
             records = [json.loads(line) for line in ledger.read_text().splitlines()]
-            self.assertEqual(records, [{"fragment_id": FRAGMENT_ID, "status": "failed", "error": "local_io_error"}])
+            self.assertEqual([record["status"] for record in records], ["pending", "failed"])
+            self.assertEqual(records[1]["error"], "local_io_error")
+            self.assertEqual(records[0]["attempt_id"], records[1]["attempt_id"])
 
     def test_wrong_identity_workspace_and_malformed_envelopes_fail_closed(self):
         bad_fragments = [
@@ -247,6 +256,66 @@ class FragmentReadTests(unittest.TestCase):
             reader.read_fragment(FRAGMENT_ID, "token", WORKSPACE_ID, opener=opener, max_retries=5)
         self.assertEqual(raised.exception.code, "http_404")
         self.assertEqual(len(opener.calls), 1)
+
+    def test_truncated_chunked_read_after_success_is_recorded_incomplete(self):
+        ledger_path = {}
+        observed_statuses = []
+
+        class TruncatedChunkHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                observed_statuses.extend(
+                    json.loads(line)["status"]
+                    for line in ledger_path["value"].read_text().splitlines()
+                )
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                self.wfile.write(b"20\r\n{\"success\":true,\"fragment\":{\r\n")
+                self.wfile.flush()
+                self.connection.shutdown(socket.SHUT_WR)
+
+            def log_message(self, format, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), TruncatedChunkHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                ledger = Path(directory) / "ledger.jsonl"
+                ledger_path["value"] = ledger
+                required = Path(directory) / "required.txt"
+                required.write_text(FRAGMENT_ID + "\n")
+                ledger.write_text(json.dumps({
+                    "fragment_id": FRAGMENT_ID,
+                    "status": "success",
+                }) + "\n")
+                environment = {
+                    "USABLE_API_TOKEN": "test-only-token",
+                    "WORKSPACE_ID": WORKSPACE_ID,
+                    "USABLE_GROUNDING_LEDGER": str(ledger),
+                }
+                origin = f"http://127.0.0.1:{server.server_port}"
+                with mock.patch.dict(os.environ, environment, clear=False), \
+                     mock.patch.object(reader, "API_ORIGIN", origin), \
+                     mock.patch.object(reader, "DEFAULT_MAX_RETRIES", 0), \
+                     redirect_stderr(io.StringIO()):
+                    result = reader.main([FRAGMENT_ID])
+                self.assertEqual(result, 1)
+                records = [json.loads(line) for line in ledger.read_text().splitlines()]
+                self.assertEqual(records[-2]["status"], "pending")
+                self.assertEqual(records[-1]["status"], "failed")
+                self.assertEqual(records[-1]["error"], "protocol_error")
+                self.assertEqual(records[-2]["attempt_id"], records[-1]["attempt_id"])
+                evaluated = grounding_ledger.evaluate(required, ledger)
+                self.assertEqual(evaluated["status"], "incomplete")
+                self.assertEqual(evaluated["failed_attempts"], [FRAGMENT_ID])
+                self.assertEqual(observed_statuses, ["success", "pending"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
 
 
 if __name__ == "__main__":

@@ -523,6 +523,9 @@ runs:
         rm -f /tmp/gemini-settings.json
         rm -f /tmp/gemini-stderr.log
         rm -f /tmp/validation-full-output.md
+        rm -f /tmp/validation-provider-stderr.log
+        rm -f /tmp/validation-report.candidate.*
+        rm -f /tmp/validation-report.safe.*
         rm -f /tmp/opencode.json
         rm -f ./opencode.json
         rm -f /tmp/usable-grounding-ledger.jsonl

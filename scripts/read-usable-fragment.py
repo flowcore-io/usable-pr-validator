@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read one complete Usable fragment through a fixed, read-only REST endpoint."""
 
+import http.client
 import json
 import os
 import re
@@ -9,6 +10,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import uuid
 
 API_ORIGIN = "https://usable.dev"
 API_PATH_PREFIX = "/api/memory-fragments/"
@@ -114,6 +116,9 @@ def read_fragment(
                 raise FragmentReadError("redirect_refused") from exc
             if exc.code not in TRANSIENT_HTTP_STATUSES or attempt >= max_retries:
                 raise FragmentReadError(f"http_{exc.code}") from exc
+        except http.client.HTTPException as exc:
+            if attempt >= max_retries:
+                raise FragmentReadError("protocol_error") from exc
         except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError) as exc:
             if attempt >= max_retries:
                 raise FragmentReadError("network_error") from exc
@@ -122,11 +127,13 @@ def read_fragment(
     raise FragmentReadError("retry_exhausted")
 
 
-def append_ledger(path, fragment_id, status, error=None):
+def append_ledger(path, fragment_id, status, error=None, attempt_id=None):
     if not path:
         return
     safe_fragment_id = fragment_id.lower() if isinstance(fragment_id, str) and UUID_PATTERN.fullmatch(fragment_id) else "invalid-input"
     record = {"fragment_id": safe_fragment_id, "status": status}
+    if attempt_id:
+        record["attempt_id"] = attempt_id
     if error:
         record["error"] = error
     encoded = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
@@ -152,6 +159,14 @@ def main(argv=None):
 
     fragment_id = arguments[0]
     workspace_id = os.environ.get("WORKSPACE_ID", "")
+    attempt_id = None
+
+    try:
+        _require_uuid(fragment_id, "fragment_id")
+        attempt_id = str(uuid.uuid4())
+        append_ledger(ledger, fragment_id, "pending", attempt_id=attempt_id)
+    except ValueError:
+        pass
 
     try:
         result = read_fragment(
@@ -162,11 +177,11 @@ def main(argv=None):
         )
     except (ValueError, FragmentReadError) as exc:
         code = exc.code if isinstance(exc, FragmentReadError) else "validation_error"
-        append_ledger(ledger, fragment_id, "failed", code)
+        append_ledger(ledger, fragment_id, "failed", code, attempt_id=attempt_id)
         print(f"Usable fragment read failed ({code})", file=sys.stderr)
         return 1
     except OSError:
-        append_ledger(ledger, fragment_id, "failed", "local_io_error")
+        append_ledger(ledger, fragment_id, "failed", "local_io_error", attempt_id=attempt_id)
         print("Usable fragment read failed (local_io_error)", file=sys.stderr)
         return 1
 
@@ -175,11 +190,11 @@ def main(argv=None):
         sys.stdout.write(rendered + "\n")
         sys.stdout.flush()
     except OSError:
-        append_ledger(ledger, fragment_id, "failed", "local_io_error")
+        append_ledger(ledger, fragment_id, "failed", "local_io_error", attempt_id=attempt_id)
         print("Usable fragment read failed (local_io_error)", file=sys.stderr)
         return 1
 
-    append_ledger(ledger, fragment_id, "success")
+    append_ledger(ledger, fragment_id, "success", attempt_id=attempt_id)
     return 0
 
 
