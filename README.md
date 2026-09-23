@@ -496,6 +496,8 @@ Your prompt should instruct the AI to output this structure:
 - **Suggestions**: [count]
 ```
 
+The action isolates only the provider's completed final assistant response before parsing it. For OpenCode 1.18.17, it selects the terminal `step_start`/`step_finish` span by `messageID` and joins only completed text parts from that span; earlier assistant text, tool output, errors, and incomplete terminal events cannot become the report. Gemini CLI 0.7.0 uses only its top-level JSON `response` string. A single conservative preamble (for example, `Here is the requested PR validation report:`) and a full outer Markdown fence are normalized away, but multiple report headers remain invalid. Provider transcripts stay runner-local; logs contain only metadata counts and error codes.
+
 ## 🔌 Usable Integration (Required)
 
 ### What is Usable?
