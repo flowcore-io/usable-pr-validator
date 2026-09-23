@@ -606,8 +606,18 @@ extract_report() {
     return 1
   fi
 
-  if ! "$SCRIPT_DIR/scripts/parse-validation-report.py" "$candidate_file" >/dev/null; then
+  local normalized_file
+  normalized_file=$(mktemp /tmp/validation-report.candidate.XXXXXX)
+  chmod 600 "$normalized_file"
+  if ! "$SCRIPT_DIR/scripts/parse-validation-report.py" --normalize "$candidate_file" > "$normalized_file"; then
+    rm -f "$normalized_file"
     echo "::error::AI output did not contain a valid structured final verdict"
+    return 1
+  fi
+  mv -f "$normalized_file" "$candidate_file"
+
+  if ! "$SCRIPT_DIR/scripts/parse-validation-report.py" "$candidate_file" >/dev/null; then
+    echo "::error::Normalized AI output did not contain a valid structured final verdict"
     return 1
   fi
 

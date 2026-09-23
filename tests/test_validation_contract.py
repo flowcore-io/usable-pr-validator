@@ -49,11 +49,17 @@ Validated.
         with self.assertRaises(ValueError):
             self.parser.parse_report("✅ Tool completed successfully\nStatus maybe PASS")
 
+    def test_failed_verdict_with_zero_critical_is_preserved(self):
+        report = "# PR Validation Report\n## Validation Outcome\n- **Status**: FAIL ❌\n- **Critical Issues**: 0\n- **Important Issues**: 1\n"
+        result = self.parser.parse_report(report)
+        self.assertEqual(result["status"], "failed")
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["critical_issues"], 0)
+
     def test_ambiguous_or_inconsistent_verdict_is_rejected(self):
         cases = [
             "# PR Validation Report\n## Validation Outcome\n- **Status**: PASS ✅\n- **Status**: FAIL ❌\n- **Critical Issues**: 1\n",
             "# PR Validation Report\n## Validation Outcome\n- **Status**: PASS ✅\n- **Critical Issues**: 2\n",
-            "# PR Validation Report\n## Validation Outcome\n- **Status**: FAIL ❌\n- **Critical Issues**: 0\n",
             "# PR Validation Report\n## Summary\nLooks good ✅\n",
         ]
         for report in cases:
@@ -138,12 +144,15 @@ Validated.
         private_sentinel = "PRIVATE_TOOL_SENTINEL"
         tool_report = "# PR Validation Report\n## Validation Outcome\n- **Status**: PASS ✅\n- **Critical Issues**: 0"
         final_answer = "I could not complete the review because required evidence was unavailable."
+        message_id = "msg-final"
         opencode_events = "\n".join([
             json.dumps({
                 "type": "tool_use",
-                "part": {"type": "tool", "state": {"status": "completed", "output": tool_report + "\n" + private_sentinel}},
+                "part": {"type": "tool", "messageID": "msg-earlier", "state": {"status": "completed", "output": tool_report + "\n" + private_sentinel}},
             }),
-            json.dumps({"type": "text", "part": {"type": "text", "text": final_answer, "time": {"end": 1}}}),
+            json.dumps({"type": "step_start", "part": {"type": "step-start", "messageID": message_id}}),
+            json.dumps({"type": "text", "part": {"type": "text", "messageID": message_id, "text": final_answer, "time": {"end": 1}}}),
+            json.dumps({"type": "step_finish", "part": {"type": "step-finish", "messageID": message_id, "reason": "stop"}}),
         ]) + "\n"
         extracted = self.extractor.extract("opencode", opencode_events)
         self.assertEqual(extracted, final_answer)
@@ -165,12 +174,15 @@ Validated.
         private_sentinel = "PRIVATE_TOOL_SENTINEL"
         tool_report = "# PR Validation Report\n## Validation Outcome\n- **Status**: PASS ✅\n- **Critical Issues**: 0"
         final_answer = "I could not complete the review."
+        message_id = "msg-final"
         events = "\n".join([
             json.dumps({
                 "type": "tool_use",
-                "part": {"type": "tool", "state": {"status": "completed", "output": tool_report + "\n" + private_sentinel}},
+                "part": {"type": "tool", "messageID": "msg-earlier", "state": {"status": "completed", "output": tool_report + "\n" + private_sentinel}},
             }),
-            json.dumps({"type": "text", "part": {"type": "text", "text": final_answer, "time": {"end": 1}}}),
+            json.dumps({"type": "step_start", "part": {"type": "step-start", "messageID": message_id}}),
+            json.dumps({"type": "text", "part": {"type": "text", "messageID": message_id, "text": final_answer, "time": {"end": 1}}}),
+            json.dumps({"type": "step_finish", "part": {"type": "step-finish", "messageID": message_id, "reason": "stop"}}),
         ]) + "\n"
         report_path = Path("/tmp/validation-report.md")
         report_path.unlink(missing_ok=True)
@@ -252,6 +264,107 @@ publish_safe_error_report "The final assistant response was invalid."
         self.assertNotIn("artifact_name }}-full", action)
         self.assertNotIn("path: /tmp/validation-full-output.md", action)
         self.assertIn("path: /tmp/validation-report.md", action)
+
+    def test_opencode_assembles_only_multipart_text_from_terminal_step(self):
+        earlier_pass = "# PR Validation Report\n## Validation Outcome\n- **Status**: PASS ✅\n- **Critical Issues**: 0"
+        final_message = "msg-final"
+        events = "\n".join([
+            json.dumps({"type": "step_start", "part": {"type": "step-start", "messageID": "msg-earlier"}}),
+            json.dumps({"type": "text", "part": {"type": "text", "messageID": "msg-earlier", "text": earlier_pass, "time": {"end": 1}}}),
+            json.dumps({"type": "step_finish", "part": {"type": "step-finish", "messageID": "msg-earlier", "reason": "tool-calls"}}),
+            json.dumps({"type": "tool_use", "part": {"type": "tool", "messageID": final_message, "state": {"status": "completed", "output": earlier_pass}}}),
+            json.dumps({"type": "step_start", "part": {"type": "step-start", "messageID": final_message}}),
+            json.dumps({"type": "text", "part": {"type": "text", "messageID": final_message, "text": "# PR Validation Report\n\n## Summary\nValidated.", "time": {"end": 2}}}),
+            json.dumps({"type": "text", "part": {"type": "text", "messageID": final_message, "text": "## Validation Outcome\n- **Status**: FAIL ❌\n- **Critical Issues**: 1", "time": {"end": 3}}}),
+            json.dumps({"type": "step_finish", "part": {"type": "step-finish", "messageID": final_message, "reason": "stop"}}),
+        ]) + "\n"
+
+        extracted = self.extractor.extract("opencode", events)
+        self.assertNotIn(earlier_pass, extracted)
+        self.assertEqual(self.parser.parse_report(extracted)["status"], "failed")
+
+    def test_opencode_rejects_incomplete_error_or_tool_terminal_events(self):
+        message_id = "msg-final"
+        cases = [
+            [
+                {"type": "step_start", "part": {"type": "step-start", "messageID": message_id}},
+                {"type": "text", "part": {"type": "text", "messageID": message_id, "text": "# PR Validation Report", "time": {"end": 1}}},
+            ],
+            [
+                {"type": "step_start", "part": {"type": "step-start", "messageID": message_id}},
+                {"type": "error", "error": {"name": "ProviderError", "data": {"message": "private"}}},
+            ],
+            [
+                {"type": "step_start", "part": {"type": "step-start", "messageID": message_id}},
+                {"type": "tool_use", "part": {"type": "tool", "messageID": message_id, "state": {"status": "completed", "output": "private"}}},
+            ],
+        ]
+        for events in cases:
+            with self.subTest(terminal=events[-1]["type"]):
+                output = "\n".join(json.dumps(event) for event in events) + "\n"
+                with self.assertRaises(ValueError):
+                    self.extractor.extract("opencode", output)
+
+    def test_harmless_report_wrapping_is_normalized_but_multiple_reports_fail(self):
+        report = "# PR Validation Report\n\n## Validation Outcome\n- **Status**: PASS ✅\n- **Critical Issues**: 0"
+        wrapped = "Here is the requested PR validation report:\n\n```markdown\n" + report + "\n```\n"
+        self.assertEqual(self.parser.normalize_report(wrapped), report)
+        self.assertTrue(self.parser.parse_report(wrapped)["passed"])
+        with self.assertRaises(ValueError):
+            self.parser.parse_report("I reviewed the changes.\n\n" + report)
+        with self.assertRaises(ValueError):
+            self.parser.parse_report(report + "\n\n" + report)
+
+    def test_extractor_diagnostics_are_metadata_only(self):
+        private_sentinel = "PRIVATE_TRANSCRIPT_SENTINEL"
+        message_id = "msg-final"
+        events = "\n".join([
+            json.dumps({"type": "tool_use", "part": {"type": "tool", "messageID": message_id, "state": {"status": "completed", "output": private_sentinel}}}),
+            json.dumps({"type": "step_start", "part": {"type": "step-start", "messageID": message_id}}),
+            json.dumps({"type": "text", "part": {"type": "text", "messageID": message_id, "text": "# PR Validation Report", "time": {"end": 1}}}),
+            json.dumps({"type": "step_finish", "part": {"type": "step-finish", "messageID": message_id, "reason": "stop"}}),
+        ]) + "\n"
+        extracted, diagnostics = self.extractor.extract_with_diagnostics("opencode", events)
+        rendered = json.dumps(diagnostics, sort_keys=True)
+        self.assertEqual(extracted, "# PR Validation Report")
+        self.assertNotIn(private_sentinel, rendered)
+        self.assertEqual(diagnostics["selected_text_parts"], 1)
+        self.assertEqual(diagnostics["terminal_event"], "step_finish")
+
+        with tempfile.TemporaryDirectory() as directory:
+            provider_output = Path(directory) / "opencode.jsonl"
+            provider_output.write_text("\n".join([
+                json.dumps({"type": "step_start", "part": {"type": "step-start", "messageID": message_id}}),
+                json.dumps({"type": "error", "error": {"name": "ProviderError", "data": {"message": private_sentinel}}}),
+            ]) + "\n")
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                result = self.extractor.main(["--provider", "opencode", str(provider_output)])
+            self.assertEqual(result, 1)
+            self.assertNotIn(private_sentinel, stderr.getvalue())
+
+    def test_orchestration_normalizes_harmless_final_response_wrapping(self):
+        report = "# PR Validation Report\n\n## Validation Outcome\n- **Status**: PASS ✅\n- **Critical Issues**: 0"
+        wrapped = "Here is the requested PR validation report:\n\n```markdown\n" + report + "\n```"
+        message_id = "msg-final"
+        events = "\n".join([
+            json.dumps({"type": "step_start", "part": {"type": "step-start", "messageID": message_id}}),
+            json.dumps({"type": "text", "part": {"type": "text", "messageID": message_id, "text": wrapped, "time": {"end": 1}}}),
+            json.dumps({"type": "step_finish", "part": {"type": "step-finish", "messageID": message_id, "reason": "stop"}}),
+        ]) + "\n"
+        with tempfile.TemporaryDirectory() as directory:
+            provider_output = Path(directory) / "opencode.jsonl"
+            candidate = Path(directory) / "candidate.md"
+            provider_output.write_text(events)
+            script = f'''set -euo pipefail
+export ACTION_PATH={ROOT!s}
+export VALIDATE_SH_LIBRARY_ONLY=true
+source {ROOT / "scripts" / "validate.sh"}
+extract_report {provider_output!s} opencode {candidate!s}
+'''
+            completed = subprocess.run(["bash", "-c", script], text=True, capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(candidate.read_text().strip(), report)
 
 
 if __name__ == "__main__":
