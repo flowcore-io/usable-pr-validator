@@ -115,6 +115,12 @@ jobs:
       - name: Test Pinned OpenCode Installation
         run: scripts/test-setup-opencode.sh
 
+      - name: Test MCP Tool Configuration
+        run: scripts/test-setup-mcp.sh
+
+      - name: Test Deterministic Grounding Contract
+        run: python3 -m unittest discover -s tests -v
+
       - name: Test Composite Action Dependencies
         run: scripts/test-action-dependencies.sh
 
@@ -293,7 +299,7 @@ jobs:
           - Tags: `repo:usable-pr-validator`
           - Workspace: Check for coding standards and conventions
           
-          Use `get-memory-fragment-content` to read full details of relevant fragments.
+          Use MCP search for discovery. Use the action-owned UUID-only helper from the injected grounding instructions to read full fragment content.
           
           ### Step 3: Validation Checks
           1. **Code Quality**

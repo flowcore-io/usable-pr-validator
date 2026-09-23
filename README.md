@@ -147,6 +147,7 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `use-dynamic-prompts` | Fetch latest prompt from Usable API instead of using static file | | `false` |
 | `prompt-fragment-id` | Usable fragment UUID to use as prompt (required when `use-dynamic-prompts` is `true`) | ✓ (with dynamic prompts) | |
 | `workspace-id` | Usable workspace UUID (required - used to fetch MCP system prompt) | ✓ | |
+| `required-fragment-ids` | Comma- or whitespace-separated fragment UUIDs to retrieve and verify before validation. Empty keeps legacy discovery behavior but reports grounding as `not-required`, not `complete`. | | |
 | `merge-custom-prompt` | Merge fetched Usable prompt with custom `prompt-file` (only when both are provided) | | `true` |
 | `provider` | AI provider to use (`opencode` or `gemini`) | | `opencode` |
 | `opencode-provider` | AI provider for OpenCode (e.g., `openrouter`, `anthropic`, `openai`) | | `openrouter` |
@@ -293,6 +294,7 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 | `validation-status` | Result: `passed` or `failed` |
 | `validation-passed` | Boolean: `true` or `false` |
 | `critical-issues` | Count of critical violations |
+| `grounding-status` | Deterministic grounding result: `complete`, `incomplete`, or `not-required` |
 | `report-artifact-name` | Name of report artifact |
 
 ## 🎯 Usage Examples
@@ -547,7 +549,7 @@ Usable is a team knowledge base and memory system that stores your:
    - Security requirements
    - repo:your-repo-name tag
    
-   Use get-memory-fragment-content for full details.
+   Use MCP search for discovery. Read full details with the action-owned UUID-only helper described in the injected Action-Owned Usable Grounding section.
    ```
 
 ## 💬 Comment-Triggered Revalidation
@@ -881,7 +883,7 @@ The action now automatically passes `workspace-id` to the MCP server via the `x-
 
 - `agentic-search-fragments`
 - `search-memory-fragments`
-- `get-memory-fragment-content`
+- `get-memory-fragment-content` is deliberately excluded from both CLI configurations; the action-owned UUID-only HTTPS helper performs full reads and records them in a per-run ledger
 - `explore-workspace-graph`
 - `create-memory-fragment`
 - `update-memory-fragment`

@@ -46,6 +46,10 @@ inputs:
   workspace-id:
     description: 'Usable workspace UUID (required - used to fetch MCP system prompt)'
     required: true
+  required-fragment-ids:
+    description: 'Comma- or whitespace-separated Usable fragment UUIDs that must be retrieved in full before validation. Empty preserves legacy discovery mode but is not certified as deterministic grounding.'
+    required: false
+    default: ''
   fail-on-critical:
     description: 'Fail build when critical violations are found'
     required: false
@@ -121,6 +125,9 @@ outputs:
   critical-issues:
     description: 'Count of critical violations found'
     value: ${{ steps.validate.outputs.critical_issues }}
+  grounding-status:
+    description: 'Deterministic grounding result: complete, incomplete, or not-required when no required IDs were declared'
+    value: ${{ steps.validate.outputs.grounding_status }}
   report-artifact-name:
     description: 'Name of artifact containing validation report'
     value: ${{ steps.set-artifact-name.outputs.artifact_name }}
@@ -374,6 +381,20 @@ runs:
         FALLBACK_OPENCODE_PROVIDER: ${{ inputs.fallback-opencode-provider }}
       run: |
         ${{ github.action_path }}/scripts/setup-mcp.sh
+
+    - name: Prefetch Required Usable Fragments
+      shell: bash
+      env:
+        REQUIRED_FRAGMENT_IDS: ${{ inputs.required-fragment-ids }}
+        WORKSPACE_ID: ${{ inputs.workspace-id }}
+        MCP_SECRET_NAME: ${{ inputs.mcp-token-secret }}
+      run: |
+        if ! ${{ github.action_path }}/scripts/prefetch-usable-fragments.py; then
+          echo "GROUNDING_PREFETCH_FAILED=true" >> "$GITHUB_ENV"
+          echo "::error::Required Usable grounding prefetch failed"
+        else
+          echo "GROUNDING_PREFETCH_FAILED=false" >> "$GITHUB_ENV"
+        fi
     
     - name: Fetch Prompts from Usable
       shell: bash
@@ -412,6 +433,12 @@ runs:
         OVERRIDE_COMMENT: ${{ inputs.override-comment }}
         COMMENT_AUTHOR: ${{ env.COMMENT_AUTHOR }}
         ALLOW_WEB_FETCH: ${{ inputs.allow-web-fetch }}
+        ACTION_PATH: ${{ github.action_path }}
+        WORKSPACE_ID: ${{ inputs.workspace-id }}
+        MCP_SECRET_NAME: ${{ inputs.mcp-token-secret }}
+        USABLE_GROUNDING_LEDGER: /tmp/usable-grounding-ledger.jsonl
+        USABLE_REQUIRED_FRAGMENTS_FILE: /tmp/usable-required-fragments.txt
+        USABLE_REQUIRED_GROUNDING_FILE: /tmp/usable-required-grounding.md
         GIT_PAGER: cat
       run: |
         ${{ github.action_path }}/scripts/validate.sh
@@ -487,15 +514,6 @@ runs:
         retention-days: ${{ fromJSON(inputs.artifact-retention-days) }}
         if-no-files-found: warn
     
-    - name: Upload Full Output
-      if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: ${{ steps.set-artifact-name.outputs.artifact_name }}-full
-        path: /tmp/validation-full-output.md
-        retention-days: ${{ fromJSON(inputs.artifact-retention-days) }}
-        if-no-files-found: warn
-    
     - name: Cleanup Secrets
       if: always()
       shell: bash
@@ -504,8 +522,12 @@ runs:
         rm -f /tmp/service-account.json
         rm -f /tmp/gemini-settings.json
         rm -f /tmp/gemini-stderr.log
+        rm -f /tmp/validation-full-output.md
         rm -f /tmp/opencode.json
         rm -f ./opencode.json
+        rm -f /tmp/usable-grounding-ledger.jsonl
+        rm -f /tmp/usable-required-fragments.txt
+        rm -f /tmp/usable-required-grounding.md
         echo "✅ Temporary files cleaned up"
     
     - name: Fail on Critical Violations
