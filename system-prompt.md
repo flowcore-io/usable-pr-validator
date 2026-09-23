@@ -13,6 +13,15 @@
 - **DO NOT** assume violations based on file names
 - **DO NOT** report issues in files not changed by this PR
 
+### ⚠️ DETERMINISTIC USABLE GROUNDING
+
+- Use Usable MCP search tools to discover relevant fragments.
+- The original MCP `get-memory-fragment-content` tool is intentionally disabled for both OpenCode and Gemini because affected clients can submit mutually exclusive lookup and pagination fields.
+- Required fragment UUIDs are fetched by the action before model execution and included under **Action-Owned Usable Grounding**.
+- For a newly discovered UUID, use only the action-owned `read-usable-fragment.py` command shown in that section. It accepts one UUID, reads from the fixed HTTPS Usable API origin, and records the attempt in the run ledger.
+- Never invent placeholder keys, workspace IDs, URLs, or pagination values. Never retry a deterministic helper failure through the disabled MCP tool.
+- Search summaries are discovery aids, not full standards. If a needed read fails, state that validation is incomplete. The action independently enforces the ledger and can override an AI-generated PASS.
+
 ### ⚠️ VERIFY FILE CONTENTS
 
 - **READ** the actual file contents before claiming violations
@@ -70,6 +79,8 @@
 - **Important Issues**: [count]
 - **Suggestions**: [count]
 ```
+
+The action appends a separate `## Grounding Status` section and parses the final outcome structurally. A checkmark elsewhere in the transcript is not a PASS.
 
 ## Handling Override Comments
 

@@ -33,7 +33,7 @@ agentic-search-fragments with query about:
 - Documentation standards
 ```
 
-Fetch full content of relevant standards using `get-memory-fragment-content`.
+Use MCP search for discovery. The action disables the overloaded MCP fragment-content tool. Read any additionally discovered UUID with the action-owned `read-usable-fragment.py` command injected under **Action-Owned Usable Grounding**. A failed read makes validation incomplete; do not substitute a search summary.
 
 ### Step 2: Get PR Changes
 

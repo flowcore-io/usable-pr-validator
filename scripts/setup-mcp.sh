@@ -5,7 +5,7 @@ echo "::group::Setting up MCP Server Integration"
 
 # Set defaults for local testing
 MCP_SECRET_NAME="${MCP_SECRET_NAME:-USABLE_API_TOKEN}"
-MCP_URL="${MCP_SERVER_URL:-https://usable.dev/api/mcp}"
+MCP_URL="${MCP_URL:-${MCP_SERVER_URL:-https://usable.dev/api/mcp}}"
 PROVIDER="${PROVIDER:-opencode}"
 OPENCODE_PROVIDER="${OPENCODE_PROVIDER:-openrouter}"
 OPENCODE_MODEL="${OPENCODE_MODEL:-moonshotai/kimi-k2.5}"
@@ -45,6 +45,9 @@ if [ "$PROVIDER" = "opencode" ]; then
   },
   "model": "${OPENCODE_PROVIDER}/${OPENCODE_MODEL}",
   "autoupdate": false,
+  "tools": {
+    "usable_get-memory-fragment-content": false
+  },
   "mcp": {
     "usable": {
       "type": "remote",
@@ -85,8 +88,10 @@ else
   "mcpServers": {
     "usable": {
       "httpUrl": "$MCP_URL",
+      "excludeTools": ["get-memory-fragment-content"],
       "headers": {
-        "Authorization": "Bearer $MCP_TOKEN"
+        "Authorization": "Bearer $MCP_TOKEN",
+        "x-workspace-id": "${WORKSPACE_ID:-}"
       }
     }
   }
@@ -96,12 +101,13 @@ EOF
   # Set restrictive permissions
   chmod 600 /tmp/gemini-settings.json
 
-  # Set environment variable for Gemini CLI to use this settings file
-  export GEMINI_SETTINGS="/tmp/gemini-settings.json"
+  # Gemini CLI 0.7.0 reads this documented system-settings override. The old
+  # GEMINI_SETTINGS variable is not consumed by that pinned CLI version.
+  export GEMINI_CLI_SYSTEM_SETTINGS_PATH="/tmp/gemini-settings.json"
 
   # Write to GITHUB_ENV for subsequent steps (if in GitHub Actions)
   if [ -n "${GITHUB_ENV:-}" ]; then
-    echo "GEMINI_SETTINGS=/tmp/gemini-settings.json" >> "$GITHUB_ENV"
+    echo "GEMINI_CLI_SYSTEM_SETTINGS_PATH=/tmp/gemini-settings.json" >> "$GITHUB_ENV"
   fi
 
   echo "✅ Gemini MCP server configured"

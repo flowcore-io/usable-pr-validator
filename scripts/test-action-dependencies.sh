@@ -30,7 +30,7 @@ assert_count 1 \
 assert_count 1 \
   '^[[:space:]]*uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9\.0\.0$' \
   'github-script v9.0.0 pin'
-assert_count 2 \
+assert_count 1 \
   '^[[:space:]]*uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7\.0\.1$' \
   'upload-artifact v7.0.1 pins'
 assert_count 1 \

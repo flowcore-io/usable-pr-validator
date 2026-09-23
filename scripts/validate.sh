@@ -3,6 +3,62 @@ set -euo pipefail
 
 echo "::group::Running PR Validation"
 
+SCRIPT_DIR="${ACTION_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+GROUNDING_LEDGER="${USABLE_GROUNDING_LEDGER:-/tmp/usable-grounding-ledger.jsonl}"
+REQUIRED_FRAGMENTS_FILE="${USABLE_REQUIRED_FRAGMENTS_FILE:-/tmp/usable-required-fragments.txt}"
+REQUIRED_GROUNDING_FILE="${USABLE_REQUIRED_GROUNDING_FILE:-/tmp/usable-required-grounding.md}"
+
+publish_safe_error_report() {
+  local summary="${1:-Validation failed before a publishable report was available.}"
+  local safe_file
+  safe_file=$(mktemp /tmp/validation-report.safe.XXXXXX)
+  chmod 600 "$safe_file"
+  cat > "$safe_file" <<EOF
+# PR Validation Report
+
+## Summary
+$summary
+
+## Critical Violations ❌
+- [ ] **Validation infrastructure failure**: No validated assistant report is available for publication.
+
+## Validation Outcome
+- **Status**: FAIL ❌
+- **Critical Issues**: 1
+- **Important Issues**: 0
+- **Suggestions**: 0
+EOF
+  mv -f "$safe_file" /tmp/validation-report.md
+}
+
+write_outputs() {
+  local validation_status="$1"
+  local validation_passed="$2"
+  local critical_issues="$3"
+  local grounding_status="$4"
+  if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    {
+      echo "validation_status=$validation_status"
+      echo "validation_passed=$validation_passed"
+      echo "critical_issues=$critical_issues"
+      echo "grounding_status=$grounding_status"
+    } >> "$GITHUB_OUTPUT"
+  fi
+}
+
+grounding_result() {
+  "$SCRIPT_DIR/scripts/check-grounding-ledger.py" \
+    --required "$REQUIRED_FRAGMENTS_FILE" \
+    --ledger "$GROUNDING_LEDGER"
+}
+
+json_field() {
+  python3 -c 'import json,sys; value=json.loads(sys.argv[1]);
+for key in sys.argv[2].split("."):
+    value=value[key]
+print(len(value) if isinstance(value, list) else value)' "$1" "$2"
+}
+
 # Function to verify git refs are available and test diff
 verify_git_refs() {
   local base="${BASE_BRANCH}"
@@ -313,6 +369,22 @@ ${OVERRIDE_COMMENT}
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_URL\}\}/${PR_URL}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_AUTHOR\}\}/${PR_AUTHOR}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_LABELS\}\}/${PR_LABELS:-none}}"
+
+  if [ -f "$REQUIRED_GROUNDING_FILE" ]; then
+    PROMPT_CONTENT="${PROMPT_CONTENT}
+
+---
+
+## Action-Owned Usable Grounding
+
+The original MCP \`get-memory-fragment-content\` tool is disabled because affected model clients can generate invalid overloaded payloads. Keep using MCP search for discovery. Read any additionally discovered fragment only with:
+
+\`python3 ${SCRIPT_DIR}/scripts/read-usable-fragment.py FRAGMENT_UUID\`
+
+Do not retry a failed deterministic read with alternate or placeholder arguments. Any helper failure makes grounding incomplete and the action will fail outside the model. The following required sources were prefetched and verified before model execution:
+
+$(cat "$REQUIRED_GROUNDING_FILE")"
+  fi
   
   # Write to temp file
   echo "$PROMPT_CONTENT" > "$output_file"
@@ -365,8 +437,12 @@ run_gemini() {
     # the prompt exceed the kernel's per-argument cap (MAX_ARG_STRLEN, 128KB on
     # Linux) → "Argument list too long" (exit 126). gemini reads piped stdin as
     # the prompt when stdin is not a TTY (cli/src/gemini.tsx). `--prompt` is also
-    # deprecated upstream. `set -o pipefail` keeps $? as gemini's exit code.
-    gemini -y -m "$GEMINI_MODEL" < "$prompt_file" 2>&1 | tee /tmp/validation-full-output.md
+    # deprecated upstream. Keep the provider transcript private: fragment bodies
+    # and other grounding content must not be copied into the public job log.
+    : > /tmp/validation-full-output.md
+    : > /tmp/validation-provider-stderr.log
+    chmod 600 /tmp/validation-full-output.md /tmp/validation-provider-stderr.log
+    gemini -y -m "$GEMINI_MODEL" --output-format json < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log
     local exit_code=$?
     
     set -e  # Re-enable exit on error
@@ -383,16 +459,15 @@ run_gemini() {
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo ""
       
-      # Error details are shown above in the output
-      echo "⚠️ Check the output above for error details"
+      echo "⚠️ Provider transcript retained privately for structured report extraction"
       
       # Check if it's a retryable error. Includes transient upstream provider
       # failures (OpenRouter 504/530, generic "Provider returned error",
       # connection resets) in addition to the classic rate-limit signals, so
       # flaky LLM backends don't burn the whole validation run.
       local is_retryable=false
-      if [ -f /tmp/validation-full-output.md ] && \
-         grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" /tmp/validation-full-output.md; then
+      if grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" \
+         /tmp/validation-full-output.md /tmp/validation-provider-stderr.log 2>/dev/null; then
         is_retryable=true
       fi
       
@@ -409,7 +484,7 @@ run_gemini() {
         fi
       else
         # Non-retryable error
-        echo "::error::Non-retryable error occurred. See error details above."
+        echo "::error::Non-retryable provider error occurred."
         return 1
       fi
     fi
@@ -458,8 +533,12 @@ run_opencode() {
     # the prompt exceed the kernel's per-argument cap (MAX_ARG_STRLEN, 128KB on
     # Linux) → "Argument list too long" (exit 126). opencode reads piped stdin as
     # the message when stdin is not a TTY (cli/cmd/run.ts). `set -o pipefail`
-    # keeps $? as opencode's exit code through the tee pipe.
-    opencode run -m "$full_model" < "$prompt_file" 2>&1 | tee /tmp/validation-full-output.md
+    # Keep the provider transcript private rather than teeing fragment bodies or
+    # other model context into the public job log.
+    : > /tmp/validation-full-output.md
+    : > /tmp/validation-provider-stderr.log
+    chmod 600 /tmp/validation-full-output.md /tmp/validation-provider-stderr.log
+    opencode run --format json -m "$full_model" < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log
     local exit_code=$?
 
     set -e  # Re-enable exit on error
@@ -476,15 +555,15 @@ run_opencode() {
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo ""
 
-      echo "⚠️ Check the output above for error details"
+      echo "⚠️ Provider transcript retained privately for structured report extraction"
 
       # Check if it's a retryable error. Includes transient upstream provider
       # failures (OpenRouter 504/530, generic "Provider returned error",
       # connection resets) in addition to the classic rate-limit signals, so
       # flaky LLM backends don't burn the whole validation run.
       local is_retryable=false
-      if [ -f /tmp/validation-full-output.md ] && \
-         grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" /tmp/validation-full-output.md; then
+      if grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" \
+         /tmp/validation-full-output.md /tmp/validation-provider-stderr.log 2>/dev/null; then
         is_retryable=true
       fi
 
@@ -501,7 +580,7 @@ run_opencode() {
         fi
       else
         # Non-retryable error — caller should NOT fall back to a different provider.
-        echo "::error::Non-retryable error occurred. See error details above."
+        echo "::error::Non-retryable provider error occurred."
         return 1
       fi
     fi
@@ -513,110 +592,77 @@ run_opencode() {
 # Extract validation report from AI output
 extract_report() {
   local full_output="$1"
-  local report_file="/tmp/validation-report.md"
-  
-  # Strategy 1: Look for "# PR Validation Report" header
-  if grep -q "# PR Validation Report" "$full_output"; then
-    echo "Extracting report using Strategy 1: PR Validation Report header"
-    sed -n '/# PR Validation Report/,$p' "$full_output" > "$report_file"
-    return 0
-  fi
-  
-  # Strategy 2: Look for "## Summary" section
-  if grep -q "## Summary" "$full_output"; then
-    echo "Extracting report using Strategy 2: Summary section"
-    sed -n '/## Summary/,$p' "$full_output" > "$report_file"
-    echo "# PR Validation Report" | cat - "$report_file" > /tmp/temp && mv /tmp/temp "$report_file"
-    return 0
-  fi
-  
-  # Strategy 3: Look for "## Critical Violations" section
-  if grep -q "## Critical Violations" "$full_output"; then
-    echo "Extracting report using Strategy 3: Critical Violations section"
-    sed -n '/## Critical Violations/,$p' "$full_output" > "$report_file"
-    echo "# PR Validation Report" | cat - "$report_file" > /tmp/temp && mv /tmp/temp "$report_file"
-    return 0
-  fi
-  
-  # Strategy 4: Use full output with warning
-  echo "::warning::Could not find report markers. Using full output."
-  echo "::group::AI Full Output (first 50 lines)"
-  head -50 "$full_output" || echo "Could not read output file"
-  echo "::endgroup::"
+  local provider="$2"
+  local candidate_file="$3"
   
   if [ ! -f "$full_output" ]; then
     echo "::error::Full output file does not exist: $full_output"
     return 1
   fi
-  
-  cp "$full_output" "$report_file"
-  
-  if [ ! -f "$report_file" ]; then
-    echo "::error::Failed to create report file: $report_file"
+
+  if ! "$SCRIPT_DIR/scripts/extract-provider-report.py" \
+      --provider "$provider" "$full_output" > "$candidate_file"; then
+    echo "::error::Could not isolate the final assistant response from provider output"
     return 1
   fi
-  
-  echo "✅ Report file created (using full output)"
+
+  if ! "$SCRIPT_DIR/scripts/parse-validation-report.py" "$candidate_file" >/dev/null; then
+    echo "::error::AI output did not contain a valid structured final verdict"
+    return 1
+  fi
+
+  echo "✅ Structured report extracted"
   return 0
 }
 
 # Parse validation results and set GitHub outputs
 parse_results() {
   local report_file="$1"
-  
-  # Check for PASS/FAIL status
-  local validation_status
-  local validation_passed
-  local critical_issues
-  
-  if grep -q -i "Status.*PASS" "$report_file" || grep -q "✅" "$report_file"; then
-    validation_status="passed"
-    validation_passed="true"
-  else
-    validation_status="failed"
-    validation_passed="false"
-  fi
-  
-  # Count critical issues (looking for unchecked critical violations)
-  # Strip any whitespace/newlines and ensure we get a clean integer
-  critical_issues=$(grep -c "^- \[ \] \*\*" "$report_file" 2>/dev/null || echo "0")
-  critical_issues=$(echo "$critical_issues" | tr -d '\n\r' | tr -d ' ')
-  
-  # Ensure we have a valid integer (default to 0 if empty or invalid)
-  if ! [[ "$critical_issues" =~ ^[0-9]+$ ]]; then
-    critical_issues=0
-  fi
-  
-  # If status is fail but no critical issues found, set to 1
-  if [ "$validation_status" = "failed" ] && [ "$critical_issues" -eq 0 ]; then
-    critical_issues=1
-  fi
-  
-  # Write outputs using heredoc delimiter (multiline-safe, prevents injection)
-  if [ -n "${GITHUB_OUTPUT:-}" ]; then
-    {
-      echo "validation_status<<EOF"
-      echo "$validation_status"
-      echo "EOF"
-      echo "validation_passed<<EOF"
-      echo "$validation_passed"
-      echo "EOF"
-      echo "critical_issues<<EOF"
-      echo "$critical_issues"
-      echo "EOF"
-    } >> "$GITHUB_OUTPUT"
-    
-    echo "✅ Outputs written successfully"
-  else
-    echo "✅ Outputs captured (local mode, no GITHUB_OUTPUT)"
-  fi
-  
-  # Export for display
+  local parsed validation_status validation_passed critical_issues
+  parsed=$("$SCRIPT_DIR/scripts/parse-validation-report.py" "$report_file") || return 1
+  validation_status=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["status"])' "$parsed")
+  validation_passed=$(python3 -c 'import json,sys; print(str(json.loads(sys.argv[1])["passed"]).lower())' "$parsed")
+  critical_issues=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["critical_issues"])' "$parsed")
   echo "$validation_status|$validation_passed|$critical_issues"
 }
 
 # Main execution
 main() {
+  local grounding_json grounding_rc=0 grounding_status
+  rm -f /tmp/validation-report.md /tmp/validation-report.candidate.* /tmp/validation-report.safe.*
+  grounding_json=$(grounding_result) || grounding_rc=$?
+  if [ "$grounding_rc" -eq 2 ]; then
+    echo "::error::Grounding ledger is malformed"
+    write_outputs "error" "false" "0" "incomplete"
+    exit 1
+  fi
+  grounding_status=$(json_field "$grounding_json" status)
+  if [ "${GROUNDING_PREFETCH_FAILED:-false}" = "true" ] || [ "$grounding_status" = "incomplete" ]; then
+    cat > /tmp/validation-report.md <<EOF
+# PR Validation Report
+
+## Summary
+Validation did not run because deterministic Usable grounding was incomplete.
+
+## Critical Violations ❌
+- [ ] **Validation infrastructure failure**: One or more declared required fragments could not be retrieved and verified.
+
+## Validation Outcome
+- **Status**: FAIL ❌
+- **Critical Issues**: 1
+- **Important Issues**: 0
+- **Suggestions**: 0
+EOF
+    "$SCRIPT_DIR/scripts/enforce-grounding-report.py" /tmp/validation-report.md \
+      --status incomplete \
+      --required-count "$(json_field "$grounding_json" required_count)" \
+      --missing-count "$(json_field "$grounding_json" missing_required)" \
+      --failed-count "$(json_field "$grounding_json" failed_attempts)"
+    write_outputs "error" "false" "1" "incomplete"
+    echo "::error::Validation execution stopped because required grounding is incomplete"
+    exit 1
+  fi
+
   # Verify git refs before starting validation
   if ! verify_git_refs; then
     echo "::warning::Git diff verification failed. Continuing anyway, but validation may fail."
@@ -669,24 +715,9 @@ main() {
   if [ "$rc" -ne 0 ]; then
     echo "::error::Validation execution failed"
 
-    # Set failed outputs using heredoc delimiter
-    if [ -n "${GITHUB_OUTPUT:-}" ]; then
-      {
-        echo "validation_status<<EOF"
-        echo "error"
-        echo "EOF"
-        echo "validation_passed<<EOF"
-        echo "false"
-        echo "EOF"
-        echo "critical_issues<<EOF"
-        echo "0"
-        echo "EOF"
-      } >> "$GITHUB_OUTPUT"
-
-      echo "❌ Outputs set to error state"
-    else
-      echo "❌ Validation failed (local mode, no GITHUB_OUTPUT)"
-    fi
+    publish_safe_error_report "Validation execution failed before a valid final assistant report was available."
+    write_outputs "error" "false" "0" "$grounding_status"
+    echo "❌ Outputs set to error state"
     exit 1
   fi
   
@@ -697,15 +728,50 @@ main() {
     echo "✅ Full output file exists ($(wc -l < /tmp/validation-full-output.md) lines)"
   else
     echo "::error::Full output file does not exist!"
+    publish_safe_error_report "The provider did not produce structured output for validation."
     exit 1
   fi
-  
-  if ! extract_report "/tmp/validation-full-output.md"; then
+
+  local candidate_file
+  candidate_file=$(mktemp /tmp/validation-report.candidate.XXXXXX)
+  chmod 600 "$candidate_file"
+  if ! extract_report "/tmp/validation-full-output.md" "$provider" "$candidate_file"; then
+    rm -f "$candidate_file"
+    publish_safe_error_report "The provider completed, but its final assistant response was not a valid validation report."
     echo "::error::Failed to extract validation report"
+    write_outputs "error" "false" "0" "$grounding_status"
     echo "::endgroup::"
     exit 1
   fi
   echo "::endgroup::"
+
+  grounding_rc=0
+  grounding_json=$(grounding_result) || grounding_rc=$?
+  if [ "$grounding_rc" -eq 2 ]; then
+    echo "::error::Grounding ledger is malformed after validation"
+    rm -f "$candidate_file"
+    publish_safe_error_report "The grounding ledger became invalid after provider execution."
+    write_outputs "error" "false" "0" "incomplete"
+    exit 1
+  fi
+  grounding_status=$(json_field "$grounding_json" status)
+  if ! "$SCRIPT_DIR/scripts/enforce-grounding-report.py" "$candidate_file" \
+    --status "$grounding_status" \
+    --required-count "$(json_field "$grounding_json" required_count)" \
+    --missing-count "$(json_field "$grounding_json" missing_required)" \
+    --failed-count "$(json_field "$grounding_json" failed_attempts)"; then
+    rm -f "$candidate_file"
+    publish_safe_error_report "The assistant report could not be safely combined with the action-owned grounding result."
+    write_outputs "error" "false" "0" "$grounding_status"
+    exit 1
+  fi
+  if ! "$SCRIPT_DIR/scripts/parse-validation-report.py" "$candidate_file" >/dev/null; then
+    rm -f "$candidate_file"
+    publish_safe_error_report "The grounded assistant report failed final validation and was not published."
+    write_outputs "error" "false" "0" "$grounding_status"
+    exit 1
+  fi
+  mv -f "$candidate_file" /tmp/validation-report.md
   
   # Parse results and set outputs
   echo "Parsing validation results..."
@@ -717,6 +783,11 @@ main() {
     
     # Extract values for display (pipe-separated format)
     IFS='|' read -r validation_status validation_passed critical_issues <<< "$results"
+    if [ "$grounding_status" = "incomplete" ]; then
+      write_outputs "error" "false" "$critical_issues" "$grounding_status"
+    else
+      write_outputs "$validation_status" "$validation_passed" "$critical_issues" "$grounding_status"
+    fi
     
     # Display summary
     echo ""
@@ -728,34 +799,25 @@ main() {
     echo "================================"
     echo "Status: $validation_status"
     echo "Critical Issues: $critical_issues"
+    echo "Grounding Status: $grounding_status"
     echo "================================"
+    if [ "$grounding_status" = "incomplete" ]; then
+      echo "::error::Validation execution failed because a grounding read was unresolved"
+      exit 1
+    fi
   else
     echo "::error::Report file not generated"
     
-    # Set error outputs using heredoc delimiter
-    if [ -n "${GITHUB_OUTPUT:-}" ]; then
-      {
-        echo "validation_status<<EOF"
-        echo "error"
-        echo "EOF"
-        echo "validation_passed<<EOF"
-        echo "false"
-        echo "EOF"
-        echo "critical_issues<<EOF"
-        echo "0"
-        echo "EOF"
-      } >> "$GITHUB_OUTPUT"
-      
-      echo "❌ Outputs set to error state (no report)"
-    else
-      echo "❌ No report generated (local mode, no GITHUB_OUTPUT)"
-    fi
+    write_outputs "error" "false" "0" "$grounding_status"
+    echo "❌ Outputs set to error state (no report)"
     exit 1
   fi
   
   echo "::endgroup::"
 }
 
-# Run main function
-main
+# Run main function unless sourced by the contract tests.
+if [ "${VALIDATE_SH_LIBRARY_ONLY:-false}" != "true" ]; then
+  main
+fi
 
