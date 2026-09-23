@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.5](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.4...v2.2.5) (2026-09-23)
+
+
+### Bug Fixes
+
+* close grounding and report publication review gaps ([34c67d5](https://github.com/flowcore-io/usable-pr-validator/commit/34c67d503300d309db32552ce8112284214d0ad6))
+* make fragment reads deterministic and reject incomplete grounding ([64cc612](https://github.com/flowcore-io/usable-pr-validator/commit/64cc612431f1aee94b967f0242faf7e09deb958e))
+* make fragment reads deterministic and reject incomplete grounding ([5067d94](https://github.com/flowcore-io/usable-pr-validator/commit/5067d9486d1bcaca6e60342391ac3c50c6f38623))
+
 ## [2.2.4](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.3...v2.2.4) (2026-09-07)
 
 
