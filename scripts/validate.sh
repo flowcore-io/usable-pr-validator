@@ -59,6 +59,19 @@ for key in sys.argv[2].split("."):
 print(len(value) if isinstance(value, list) else value)' "$1" "$2"
 }
 
+provider_error_metadata() {
+  local provider="$1"
+  "$SCRIPT_DIR/scripts/summarize-provider-error.py" \
+    --provider "$provider" \
+    --stdout-file /tmp/validation-full-output.md \
+    --stderr-file /tmp/validation-provider-stderr.log 2>/dev/null || \
+    printf '%s\n' '{"error_codes":[],"error_names":[],"malformed_output_lines":0,"missing_fields":["code","name","retryable","status_code"],"provider":"unknown","retryable":null,"status_codes":[],"stderr_present":false,"stdout_present":false,"structured_error_events":0}'
+}
+
+metadata_retryable() {
+  python3 -c 'import json,sys; value=json.loads(sys.argv[1]).get("retryable"); print("true" if value is True else "false" if value is False else "unknown")' "$1"
+}
+
 # Function to verify git refs are available and test diff
 verify_git_refs() {
   local base="${BASE_BRANCH}"
@@ -460,13 +473,18 @@ run_gemini() {
       echo ""
       
       echo "⚠️ Provider transcript retained privately for structured report extraction"
+      local failure_metadata
+      failure_metadata=$(provider_error_metadata "gemini")
+      echo "::notice::Provider failure metadata: $failure_metadata"
       
-      # Check if it's a retryable error. Includes transient upstream provider
-      # failures (OpenRouter 504/530, generic "Provider returned error",
-      # connection resets) in addition to the classic rate-limit signals, so
-      # flaky LLM backends don't burn the whole validation run.
+      # Prefer structured retryability metadata when available. Fall back to a
+      # private content scan for older Gemini output that has no safe fields.
       local is_retryable=false
-      if grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" \
+      local retryability
+      retryability=$(metadata_retryable "$failure_metadata")
+      if [ "$retryability" = "true" ]; then
+        is_retryable=true
+      elif [ "$retryability" = "unknown" ] && grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" \
          /tmp/validation-full-output.md /tmp/validation-provider-stderr.log 2>/dev/null; then
         is_retryable=true
       fi
@@ -556,13 +574,20 @@ run_opencode() {
       echo ""
 
       echo "⚠️ Provider transcript retained privately for structured report extraction"
+      local failure_metadata
+      failure_metadata=$(provider_error_metadata "opencode")
+      echo "::notice::Provider failure metadata: $failure_metadata"
 
-      # Check if it's a retryable error. Includes transient upstream provider
-      # failures (OpenRouter 504/530, generic "Provider returned error",
-      # connection resets) in addition to the classic rate-limit signals, so
-      # flaky LLM backends don't burn the whole validation run.
+      # OpenCode JSON events expose APIError retryability without requiring any
+      # message, response body, headers, URL, tool output, or transcript content
+      # to leave the runner. Use that field first; scan private files only when
+      # the CLI did not emit structured retryability metadata.
       local is_retryable=false
-      if grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" \
+      local retryability
+      retryability=$(metadata_retryable "$failure_metadata")
+      if [ "$retryability" = "true" ]; then
+        is_retryable=true
+      elif [ "$retryability" = "unknown" ] && grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" \
          /tmp/validation-full-output.md /tmp/validation-provider-stderr.log 2>/dev/null; then
         is_retryable=true
       fi

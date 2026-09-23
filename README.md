@@ -745,19 +745,28 @@ reported version before validation starts. This avoids depending on an
 unverified remote installer archive and prevents transient CDN responses from
 being passed to `tar`. Consumers do not need to install OpenCode themselves.
 
-### No Output from AI CLI
+### Provider CLI exits without a report
 
-**Symptom**: GitHub Action runs but shows no AI output or errors
+**Symptom**: The provider exits non-zero before producing a publishable validation report.
 
-**Possible Causes**:
+The action keeps provider stdout and stderr private because they may contain
+prompts, fragment content, tool output, tokens, or raw API responses. It does
+not stream or upload those files. Instead, the job log emits one content-free
+`Provider failure metadata` JSON object with allowlisted fields only:
 
-- AI CLI (OpenCode or Gemini) failing silently
-- Output buffering issues
-- Git diff failures preventing AI from analyzing changes
+- structured error name (or `unrecognized`)
+- numeric HTTP status code, when present
+- allowlisted machine error code, when present
+- provider-declared retryability
+- generic missing-field names and presence/count flags
 
-**Solutions**:
+Messages, response bodies, response headers, URLs, tool output, and transcript
+text are never included. Use the safe metadata to distinguish authentication,
+rate-limit/server, context-window, model/configuration, and unknown failures.
+If all identifying fields are missing, reproduce with the exact pinned action
+and provider version rather than enabling raw transcript logging.
 
-1. **Check the Git Diff Setup section** in action logs:
+Also verify the Git Diff Setup section completed before provider execution:
 
 ```
 🔍 Verifying Git Diff Setup
@@ -766,7 +775,8 @@ being passed to `tar`. Consumers do not need to install OpenCode themselves.
 ✅ Three-dot diff works: origin/main...origin/feature-branch
 ```
 
-2. **Look for CLI output** in the logs:
+The execution header confirms the selected model and prompt size without
+printing prompt content:
 
 ```
 🤖 Running OpenCode CLI
@@ -776,24 +786,9 @@ Prompt size: XXXX bytes
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-3. **Check for error details** in collapsed groups:
-
-- Look for "❌ Error Details" group
-- Check both STDERR and STDOUT output
-- Review exit codes
-
-4. **Verify git refs are properly fetched**:
-
-```yaml
-- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  with:
-    fetch-depth: 0  # Important: fetch full history
-```
-
-5. **Use the diagnostic script locally**:
+For git-only diagnosis, run:
 
 ```bash
-# Clone the repo and run
 ./scripts/test-git-diff.sh main feature-branch
 ```
 
