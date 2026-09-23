@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.6](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.5...v2.2.6) (2026-09-23)
+
+
+### Bug Fixes
+
+* assemble completed assistant reports and normalize safe wrapping ([34b6a79](https://github.com/flowcore-io/usable-pr-validator/commit/34b6a796df89f1b259ba5078675e2e06edd2d65f))
+* extract complete final assistant reports ([384d007](https://github.com/flowcore-io/usable-pr-validator/commit/384d007cb57f4d7ef9ca1c6e21e3e1d9fdf20aa4))
+* preserve failed reports without fabricated critical findings ([061e4d6](https://github.com/flowcore-io/usable-pr-validator/commit/061e4d6c451ec0f883675367b13ab2f6a57d68b3))
+
 ## [2.2.5](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.4...v2.2.5) (2026-09-23)
 
 
