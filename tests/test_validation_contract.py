@@ -29,6 +29,7 @@ class ValidationContractTests(unittest.TestCase):
         cls.prefetch = load("grounding_prefetch", "prefetch-usable-fragments.py")
         cls.reader = load("grounding_reader", "read-usable-fragment.py")
         cls.extractor = load("provider_report_extractor", "extract-provider-report.py")
+        cls.provider_error = load("provider_error_metadata", "summarize-provider-error.py")
 
     def test_exact_structured_pass_is_accepted(self):
         report = """# PR Validation Report
@@ -365,6 +366,119 @@ extract_report {provider_output!s} opencode {candidate!s}
             completed = subprocess.run(["bash", "-c", script], text=True, capture_output=True, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(candidate.read_text().strip(), report)
+    def test_provider_error_metadata_is_allowlisted_and_content_free(self):
+        private_sentinel = "PRIVATE_PROVIDER_BODY_TOKEN_TRANSCRIPT"
+        output = "\n".join([
+            json.dumps({"type": "step_start", "part": {"type": "step-start"}}),
+            json.dumps({
+                "type": "error",
+                "error": {
+                    "name": "APIError",
+                    "data": {
+                        "message": private_sentinel,
+                        "statusCode": 429,
+                        "isRetryable": True,
+                        "code": "rate_limit_exceeded",
+                        "responseBody": private_sentinel,
+                        "responseHeaders": {"authorization": private_sentinel},
+                        "metadata": {"url": private_sentinel},
+                    },
+                },
+            }),
+        ]) + "\n"
+        summary = self.provider_error.summarize("opencode", output, private_sentinel)
+        rendered = json.dumps(summary, sort_keys=True)
+        self.assertNotIn(private_sentinel, rendered)
+        self.assertEqual(summary["error_names"], ["APIError"])
+        self.assertEqual(summary["status_codes"], [429])
+        self.assertEqual(summary["error_codes"], ["rate_limit_exceeded"])
+        self.assertTrue(summary["retryable"])
+        self.assertTrue(summary["stderr_present"])
+        self.assertEqual(summary["missing_fields"], [])
+
+    def test_provider_error_metadata_reports_unknown_and_missing_generically(self):
+        private_sentinel = "PRIVATE_UNKNOWN_ERROR"
+        output = json.dumps({
+            "type": "error",
+            "error": {"name": private_sentinel, "data": {"message": private_sentinel}},
+        }) + "\n"
+        summary = self.provider_error.summarize("opencode", output, "")
+        rendered = json.dumps(summary, sort_keys=True)
+        self.assertNotIn(private_sentinel, rendered)
+        self.assertEqual(summary["error_names"], ["unrecognized"])
+        self.assertEqual(summary["status_codes"], [])
+        self.assertEqual(summary["error_codes"], [])
+        self.assertIsNone(summary["retryable"])
+        self.assertEqual(summary["missing_fields"], ["code", "retryable", "status_code"])
+
+    def test_provider_error_metadata_ignores_nested_response_body_json(self):
+        private_code = "private_customer_specific_code"
+        output = json.dumps({
+            "type": "error",
+            "error": {
+                "name": "APIError",
+                "data": {
+                    "isRetryable": False,
+                    "responseBody": json.dumps({"error": {"code": private_code}}),
+                },
+            },
+        }) + "\n"
+        summary = self.provider_error.summarize("opencode", output, "")
+        self.assertNotIn(private_code, json.dumps(summary, sort_keys=True))
+        self.assertEqual(summary["error_codes"], [])
+        self.assertEqual(summary["missing_fields"], ["code", "status_code"])
+
+    def test_validation_logs_safe_provider_metadata_instead_of_private_error_text(self):
+        validation = (ROOT / "scripts" / "validate.sh").read_text()
+        self.assertIn('summarize-provider-error.py', validation)
+        self.assertIn('Provider failure metadata:', validation)
+        self.assertNotIn('cat /tmp/validation-provider-stderr.log', validation)
+        self.assertNotIn('cat /tmp/validation-full-output.md', validation)
+
+    def test_opencode_failure_log_contains_only_safe_metadata(self):
+        private_sentinel = "PRIVATE_PROVIDER_MESSAGE_BODY_TOKEN"
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            prompt = temp / "prompt.md"
+            prompt.write_text("review")
+            fake = temp / "opencode"
+            event = json.dumps({
+                "type": "error",
+                "error": {
+                    "name": "APIError",
+                    "data": {
+                        "message": private_sentinel,
+                        "statusCode": 401,
+                        "isRetryable": False,
+                        "responseBody": private_sentinel,
+                    },
+                },
+            })
+            fake.write_text(
+                "#!/usr/bin/env bash\n"
+                f"printf '%s\\n' '{event}'\n"
+                f"printf '%s\\n' '{private_sentinel}' >&2\n"
+                "exit 1\n"
+            )
+            fake.chmod(0o755)
+            script = f'''set -euo pipefail
+export ACTION_PATH={ROOT!s}
+export VALIDATE_SH_LIBRARY_ONLY=true
+export PATH={temp!s}:$PATH
+export MAX_RETRIES=0
+source {ROOT / "scripts" / "validate.sh"}
+rc=0
+run_opencode {prompt!s} openrouter openai/example || rc=$?
+echo "return_code=$rc"
+'''
+            completed = subprocess.run(["bash", "-c", script], text=True, capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("return_code=1", completed.stdout)
+            self.assertIn('"error_names":["APIError"]', completed.stdout)
+            self.assertIn('"status_codes":[401]', completed.stdout)
+            self.assertIn('"retryable":false', completed.stdout)
+            self.assertNotIn(private_sentinel, completed.stdout)
+            self.assertNotIn(private_sentinel, completed.stderr)
 
 
 if __name__ == "__main__":
