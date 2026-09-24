@@ -161,8 +161,8 @@ That's it! Your PRs will now be validated automatically. 🎉
 | `comment-mode` | PR comment behavior (`update`/`new`/`none`) | | `update` |
 | `comment-title` | Title for PR comment (for multi-stage validation) | | `Automated Standards Validation` |
 | `artifact-retention-days` | Days to retain reports | | `30` |
-| `max-retries` | Maximum retry attempts | | `2` |
-| `timeout-minutes` | Maximum execution time in minutes | | `15` |
+| `max-retries` | Maximum whole-review retry attempts for retryable provider failures or incomplete final reports (0-10) | | `2` |
+| `timeout-minutes` | Hard shared time limit for provider attempts, backoff, and fallback (1-360 minutes) | | `15` |
 | `base-ref` | Base reference for diff comparison. Useful for release-please branches to compare against last release tag instead of base branch. | | PR base branch |
 | `head-ref` | Head reference for diff comparison | | PR head branch |
 | `allow-web-fetch` | Allow AI to use web_fetch tool for external resources (security consideration) | | `false` |

@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
@@ -258,8 +259,11 @@ publish_safe_error_report "The final assistant response was invalid."
         validation = (ROOT / "scripts" / "validate.sh").read_text()
         action = (ROOT / "action.yml").read_text()
         self.assertNotIn("| tee /tmp/validation-full-output.md", validation)
-        self.assertIn('gemini -y -m "$GEMINI_MODEL" --output-format json < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log', validation)
-        self.assertIn('opencode run --format json -m "$full_model" < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log', validation)
+        self.assertGreaterEqual(validation.count('timeout --signal=KILL "${remaining_seconds}s"'), 2)
+        self.assertNotIn("--kill-after=5s", validation)
+        self.assertIn('gemini -y -m "$GEMINI_MODEL" --output-format json', validation)
+        self.assertIn('opencode run --format json -m "$full_model"', validation)
+        self.assertGreaterEqual(validation.count('< "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log'), 2)
         self.assertGreaterEqual(validation.count("chmod 600 /tmp/validation-full-output.md"), 2)
         self.assertNotIn("Upload Full Output", action)
         self.assertNotIn("artifact_name }}-full", action)
@@ -479,6 +483,240 @@ echo "return_code=$rc"
             self.assertIn('"retryable":false', completed.stdout)
             self.assertNotIn(private_sentinel, completed.stdout)
             self.assertNotIn(private_sentinel, completed.stderr)
+
+    def test_opencode_retries_whole_review_after_incomplete_final_report(self):
+        report = "# PR Validation Report\n## Validation Outcome\n- **Status**: PASS ✅\n- **Critical Issues**: 0"
+        incomplete = [
+            {"type": "step_start", "part": {"type": "step-start", "messageID": "first"}},
+            {"type": "tool_use", "part": {"type": "tool", "messageID": "first", "state": {"status": "completed", "output": "private"}}},
+            {"type": "step_finish", "part": {"type": "step-finish", "messageID": "first", "reason": "tool-calls"}},
+        ]
+        complete = [
+            {"type": "step_start", "part": {"type": "step-start", "messageID": "second"}},
+            {"type": "text", "part": {"type": "text", "messageID": "second", "text": report, "time": {"end": 1}}},
+            {"type": "step_finish", "part": {"type": "step-finish", "messageID": "second", "reason": "stop"}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            prompt = temp / "prompt.md"
+            prompt.write_text("review")
+            counter = temp / "count"
+            first = temp / "first.jsonl"
+            second = temp / "second.jsonl"
+            first.write_text("".join(json.dumps(event) + "\n" for event in incomplete))
+            second.write_text("".join(json.dumps(event) + "\n" for event in complete))
+            fake = temp / "opencode"
+            fake.write_text(
+                "#!/usr/bin/env bash\n"
+                f"counter={counter!s}\n"
+                "count=0; [ ! -f \"$counter\" ] || count=$(cat \"$counter\")\n"
+                "count=$((count + 1)); echo \"$count\" > \"$counter\"\n"
+                f"if [ \"$count\" -eq 1 ]; then cat {first!s}; else cat {second!s}; fi\n"
+            )
+            fake.chmod(0o755)
+            script = f'''set -euo pipefail
+export ACTION_PATH={ROOT!s}
+export VALIDATE_SH_LIBRARY_ONLY=true
+export PATH={temp!s}:$PATH
+export MAX_RETRIES=1
+export VALIDATION_TIMEOUT_MINUTES=1
+source {ROOT / "scripts" / "validate.sh"}
+run_opencode {prompt!s} openrouter openai/example
+'''
+            completed = subprocess.run(["bash", "-c", script], text=True, capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(counter.read_text().strip(), "2")
+            self.assertIn("Incomplete final assistant report detected", completed.stdout)
+            extracted = self.extractor.extract("opencode", Path("/tmp/validation-full-output.md").read_text())
+            self.assertEqual(extracted, report)
+
+    def test_opencode_incomplete_final_report_recovery_is_retry_bounded(self):
+        incomplete = [
+            {"type": "step_start", "part": {"type": "step-start", "messageID": "final"}},
+            {"type": "tool_use", "part": {"type": "tool", "messageID": "final", "state": {"status": "completed", "output": "private"}}},
+            {"type": "step_finish", "part": {"type": "step-finish", "messageID": "final", "reason": "tool-calls"}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            prompt = temp / "prompt.md"
+            prompt.write_text("review")
+            counter = temp / "count"
+            fixture = temp / "incomplete.jsonl"
+            fixture.write_text("".join(json.dumps(event) + "\n" for event in incomplete))
+            fake = temp / "opencode"
+            fake.write_text(
+                "#!/usr/bin/env bash\n"
+                f"counter={counter!s}\n"
+                "count=0; [ ! -f \"$counter\" ] || count=$(cat \"$counter\")\n"
+                "echo \"$((count + 1))\" > \"$counter\"\n"
+                f"cat {fixture!s}\n"
+            )
+            fake.chmod(0o755)
+            script = f'''set -euo pipefail
+export ACTION_PATH={ROOT!s}
+export VALIDATE_SH_LIBRARY_ONLY=true
+export PATH={temp!s}:$PATH
+export MAX_RETRIES=1
+export VALIDATION_TIMEOUT_MINUTES=1
+source {ROOT / "scripts" / "validate.sh"}
+rc=0
+run_opencode {prompt!s} openrouter openai/example || rc=$?
+echo "return_code=$rc"
+'''
+            completed = subprocess.run(["bash", "-c", script], text=True, capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(counter.read_text().strip(), "2")
+            self.assertIn("return_code=2", completed.stdout)
+            self.assertIn("Maximum retries reached", completed.stdout)
+
+    def test_incomplete_report_exhaustion_is_eligible_for_configured_fallback(self):
+        report = "# PR Validation Report\n## Validation Outcome\n- **Status**: PASS ✅\n- **Critical Issues**: 0"
+        incomplete = [
+            {"type": "step_start", "part": {"type": "step-start", "messageID": "primary"}},
+            {"type": "tool_use", "part": {"type": "tool", "messageID": "primary", "state": {"status": "completed", "output": "private"}}},
+            {"type": "step_finish", "part": {"type": "step-finish", "messageID": "primary", "reason": "tool-calls"}},
+        ]
+        complete = [
+            {"type": "step_start", "part": {"type": "step-start", "messageID": "fallback"}},
+            {"type": "text", "part": {"type": "text", "messageID": "fallback", "text": report, "time": {"end": 1}}},
+            {"type": "step_finish", "part": {"type": "step-finish", "messageID": "fallback", "reason": "stop"}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            prompt = temp / "prompt.md"
+            prompt.write_text("review")
+            calls = temp / "calls"
+            primary = temp / "primary.jsonl"
+            fallback = temp / "fallback.jsonl"
+            primary.write_text("".join(json.dumps(event) + "\n" for event in incomplete))
+            fallback.write_text("".join(json.dumps(event) + "\n" for event in complete))
+            fake = temp / "opencode"
+            fake.write_text(
+                "#!/usr/bin/env bash\n"
+                "model=\n"
+                "while [ $# -gt 0 ]; do [ \"$1\" != -m ] || { model=$2; break; }; shift; done\n"
+                f"echo \"$model\" >> {calls!s}\n"
+                f"if [ \"$model\" = openrouter/openai/primary ]; then cat {primary!s}; else cat {fallback!s}; fi\n"
+            )
+            fake.chmod(0o755)
+            script = f'''set -euo pipefail
+export ACTION_PATH={ROOT!s}
+export VALIDATE_SH_LIBRARY_ONLY=true
+export PATH={temp!s}:$PATH
+export MAX_RETRIES=0
+export VALIDATION_TIMEOUT_MINUTES=1
+source {ROOT / "scripts" / "validate.sh"}
+rc=0
+run_opencode {prompt!s} openrouter openai/primary || rc=$?
+if [ "$rc" -eq 2 ]; then
+  rc=0
+  run_opencode {prompt!s} anthropic claude-fallback || rc=$?
+fi
+echo "return_code=$rc"
+'''
+            completed = subprocess.run(["bash", "-c", script], text=True, capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("return_code=0", completed.stdout)
+            self.assertEqual(
+                calls.read_text().splitlines(),
+                ["openrouter/openai/primary", "anthropic/claude-fallback"],
+            )
+            self.assertEqual(
+                self.extractor.extract("opencode", Path("/tmp/validation-full-output.md").read_text()),
+                report,
+            )
+
+    def test_opencode_recovery_cannot_exceed_shared_validation_deadline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            prompt = temp / "prompt.md"
+            prompt.write_text("review")
+            counter = temp / "count"
+            fake = temp / "opencode"
+            fake.write_text(
+                "#!/usr/bin/env bash\n"
+                f"printf x >> {counter!s}\n"
+                "trap '' TERM\n"
+                "sleep 30\n"
+            )
+            fake.chmod(0o755)
+            script = f'''set -euo pipefail
+export ACTION_PATH={ROOT!s}
+export VALIDATE_SH_LIBRARY_ONLY=true
+export PATH={temp!s}:$PATH
+export MAX_RETRIES=5
+export VALIDATION_DEADLINE_EPOCH=$(( $(date +%s) + 1 ))
+source {ROOT / "scripts" / "validate.sh"}
+rc=0
+run_opencode {prompt!s} openrouter openai/example || rc=$?
+echo "return_code=$rc"
+'''
+            started = time.monotonic()
+            completed = subprocess.run(
+                ["bash", "-c", script], text=True, capture_output=True, check=False, timeout=4
+            )
+            elapsed = time.monotonic() - started
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(counter.read_text(), "x")
+            self.assertIn("return_code=2", completed.stdout)
+            self.assertIn("Validation time limit exhausted", completed.stdout)
+            self.assertLess(elapsed, 3, f"hard deadline took {elapsed:.3f}s")
+
+    def test_configured_fallback_shares_hard_deadline_with_primary(self):
+        incomplete = [
+            {"type": "step_start", "part": {"type": "step-start", "messageID": "primary"}},
+            {"type": "tool_use", "part": {"type": "tool", "messageID": "primary", "state": {"status": "completed", "output": "private"}}},
+            {"type": "step_finish", "part": {"type": "step-finish", "messageID": "primary", "reason": "tool-calls"}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            prompt = temp / "prompt.md"
+            prompt.write_text("review")
+            calls = temp / "calls"
+            primary = temp / "primary.jsonl"
+            primary.write_text("".join(json.dumps(event) + "\n" for event in incomplete))
+            fake = temp / "opencode"
+            fake.write_text(
+                "#!/usr/bin/env bash\n"
+                "model=\n"
+                "while [ $# -gt 0 ]; do [ \"$1\" != -m ] || { model=$2; break; }; shift; done\n"
+                f"echo \"$model\" >> {calls!s}\n"
+                f"if [ \"$model\" = openrouter/openai/primary ]; then cat {primary!s}; exit 0; fi\n"
+                "trap '' TERM\n"
+                "sleep 30\n"
+            )
+            fake.chmod(0o755)
+            script = f'''set -euo pipefail
+export ACTION_PATH={ROOT!s}
+export VALIDATE_SH_LIBRARY_ONLY=true
+export PATH={temp!s}:$PATH
+export MAX_RETRIES=0
+export PROVIDER=opencode
+export OPENCODE_PROVIDER=openrouter
+export OPENCODE_MODEL=openai/primary
+export FALLBACK_OPENCODE_PROVIDER=anthropic
+export FALLBACK_OPENCODE_MODEL=claude-fallback
+export PROMPT_FILE={prompt!s}
+export VALIDATION_DEADLINE_EPOCH=$(( $(date +%s) + 2 ))
+source {ROOT / "scripts" / "validate.sh"}
+grounding_result() {{ printf '%s\\n' '{{"status":"not-required","required_count":0,"missing_required":[],"failed_attempts":[]}}'; }}
+verify_git_refs() {{ return 0; }}
+prepare_prompt() {{ printf '%s\\n' {prompt!s}; }}
+main
+'''
+            started = time.monotonic()
+            completed = subprocess.run(
+                ["bash", "-c", script], text=True, capture_output=True, check=False, timeout=5
+            )
+            elapsed = time.monotonic() - started
+            self.assertEqual(completed.returncode, 1, completed.stderr)
+            self.assertEqual(
+                calls.read_text().splitlines(),
+                ["openrouter/openai/primary", "anthropic/claude-fallback"],
+            )
+            self.assertIn("Falling back to anthropic/claude-fallback", completed.stdout)
+            self.assertIn("Validation execution failed", completed.stdout)
+            self.assertLess(elapsed, 4, f"primary and fallback exceeded shared deadline: {elapsed:.3f}s")
 
 
 if __name__ == "__main__":
