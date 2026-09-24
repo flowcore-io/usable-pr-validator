@@ -67,7 +67,7 @@ inputs:
     required: false
     default: '30'
   max-retries:
-    description: 'Maximum retry attempts for API failures'
+    description: 'Maximum retry attempts for retryable provider failures or incomplete final reports'
     required: false
     default: '2'
   timeout-minutes:
@@ -177,6 +177,16 @@ runs:
         
         if [[ ! "${{ inputs.allow-web-fetch }}" =~ ^(true|false)$ ]]; then
           echo "::error::Invalid allow-web-fetch. Must be: true or false"
+          exit 1
+        fi
+
+        if [[ ! "${{ inputs.max-retries }}" =~ ^[0-9]+$ ]] || [ "${{ inputs.max-retries }}" -gt 10 ]; then
+          echo "::error::Invalid max-retries. Must be an integer from 0 to 10"
+          exit 1
+        fi
+
+        if [[ ! "${{ inputs.timeout-minutes }}" =~ ^[1-9][0-9]*$ ]] || [ "${{ inputs.timeout-minutes }}" -gt 360 ]; then
+          echo "::error::Invalid timeout-minutes. Must be an integer from 1 to 360"
           exit 1
         fi
 
@@ -422,6 +432,7 @@ runs:
         FALLBACK_OPENCODE_PROVIDER: ${{ inputs.fallback-opencode-provider }}
         FALLBACK_OPENCODE_MODEL: ${{ inputs.fallback-opencode-model }}
         MAX_RETRIES: ${{ inputs.max-retries }}
+        VALIDATION_TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         PR_TITLE: ${{ github.event.pull_request.title }}
         PR_DESCRIPTION: ${{ github.event.pull_request.body }}

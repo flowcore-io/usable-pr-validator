@@ -72,6 +72,35 @@ metadata_retryable() {
   python3 -c 'import json,sys; value=json.loads(sys.argv[1]).get("retryable"); print("true" if value is True else "false" if value is False else "unknown")' "$1"
 }
 
+ensure_validation_deadline() {
+  if [ -z "${VALIDATION_DEADLINE_EPOCH:-}" ]; then
+    local timeout_minutes="${VALIDATION_TIMEOUT_MINUTES:-15}"
+    VALIDATION_DEADLINE_EPOCH=$(( $(date +%s) + timeout_minutes * 60 ))
+    export VALIDATION_DEADLINE_EPOCH
+  fi
+}
+
+validation_remaining_seconds() {
+  ensure_validation_deadline
+  local remaining=$(( VALIDATION_DEADLINE_EPOCH - $(date +%s) ))
+  if [ "$remaining" -gt 0 ]; then
+    printf '%s\n' "$remaining"
+  else
+    printf '0\n'
+  fi
+}
+
+sleep_before_validation_retry() {
+  local wait_time="$1"
+  local remaining
+  remaining=$(validation_remaining_seconds)
+  if [ "$remaining" -le "$wait_time" ]; then
+    echo "::error::Validation time limit exhausted before another retry could start"
+    return 1
+  fi
+  sleep "$wait_time"
+}
+
 # Function to verify git refs are available and test diff
 verify_git_refs() {
   local base="${BASE_BRANCH}"
@@ -421,8 +450,16 @@ run_gemini() {
   local prompt_file="$1"
   local retry_count=0
   local max_retries="${MAX_RETRIES:-2}"
-  
+
+  ensure_validation_deadline
+
   while [ $retry_count -le "$max_retries" ]; do
+    local remaining_seconds
+    remaining_seconds=$(validation_remaining_seconds)
+    if [ "$remaining_seconds" -le 0 ]; then
+      echo "::error::Validation time limit exhausted"
+      return 1
+    fi
     echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running Gemini validation..."
     
     # Debug: Check prompt file
@@ -455,7 +492,9 @@ run_gemini() {
     : > /tmp/validation-full-output.md
     : > /tmp/validation-provider-stderr.log
     chmod 600 /tmp/validation-full-output.md /tmp/validation-provider-stderr.log
-    gemini -y -m "$GEMINI_MODEL" --output-format json < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log
+    timeout --signal=TERM --kill-after=5s "${remaining_seconds}s" \
+      gemini -y -m "$GEMINI_MODEL" --output-format json \
+      < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log
     local exit_code=$?
     
     set -e  # Re-enable exit on error
@@ -482,7 +521,9 @@ run_gemini() {
       local is_retryable=false
       local retryability
       retryability=$(metadata_retryable "$failure_metadata")
-      if [ "$retryability" = "true" ]; then
+      if [ "$exit_code" -eq 124 ] || [ "$exit_code" -eq 137 ]; then
+        is_retryable=true
+      elif [ "$retryability" = "true" ]; then
         is_retryable=true
       elif [ "$retryability" = "unknown" ] && grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" \
          /tmp/validation-full-output.md /tmp/validation-provider-stderr.log 2>/dev/null; then
@@ -495,7 +536,7 @@ run_gemini() {
         if [ $retry_count -le "$max_retries" ]; then
           wait_time=$((2 ** retry_count))
           echo "⏳ Rate limit or timeout detected. Retrying after ${wait_time} seconds..."
-          sleep $wait_time
+          sleep_before_validation_retry "$wait_time" || return 1
         else
           echo "::error::Maximum retries reached. Validation failed."
           return 1
@@ -523,10 +564,17 @@ run_opencode() {
   local max_retries="${MAX_RETRIES:-2}"
   local full_model="${opencode_provider}/${model}"
 
+  ensure_validation_deadline
+
   while [ $retry_count -le "$max_retries" ]; do
+    local remaining_seconds
+    remaining_seconds=$(validation_remaining_seconds)
+    if [ "$remaining_seconds" -le 0 ]; then
+      echo "::error::Validation time limit exhausted"
+      return 2
+    fi
     echo "Attempt $((retry_count + 1))/$((max_retries + 1)): Running OpenCode validation (${full_model})..."
 
-    # Debug: Check prompt file
     if [ ! -f "$prompt_file" ]; then
       echo "::error::Prompt file does not exist: $prompt_file"
       return 1
@@ -536,30 +584,28 @@ run_opencode() {
     echo "Prompt file size: $(wc -c < "$prompt_file") bytes"
     echo "Prompt file lines: $(wc -l < "$prompt_file") lines"
 
-    # Show detailed execution info
     echo "🤖 Running OpenCode CLI"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Model: $full_model"
     echo "Prompt size: $(wc -c < "$prompt_file") bytes"
+    echo "Remaining validation budget: ${remaining_seconds}s"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
-    # Run OpenCode CLI and capture output
-    set +e  # Temporarily disable exit on error to capture exit code
+    set +e
 
-    # Feed the prompt via stdin, NOT as an argv argument. A large PR diff makes
-    # the prompt exceed the kernel's per-argument cap (MAX_ARG_STRLEN, 128KB on
-    # Linux) → "Argument list too long" (exit 126). opencode reads piped stdin as
-    # the message when stdin is not a TTY (cli/cmd/run.ts). `set -o pipefail`
-    # Keep the provider transcript private rather than teeing fragment bodies or
-    # other model context into the public job log.
+    # A fresh invocation is used for every attempt because the non-interactive
+    # CLI does not expose a safe continuation contract. The shared deadline
+    # bounds primary retries and any later fallback invocation together.
     : > /tmp/validation-full-output.md
     : > /tmp/validation-provider-stderr.log
     chmod 600 /tmp/validation-full-output.md /tmp/validation-provider-stderr.log
-    opencode run --format json -m "$full_model" < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log
+    timeout --signal=TERM --kill-after=5s "${remaining_seconds}s" \
+      opencode run --format json -m "$full_model" \
+      < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log
     local exit_code=$?
 
-    set -e  # Re-enable exit on error
+    set -e
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -567,7 +613,24 @@ run_opencode() {
     if [ $exit_code -eq 0 ]; then
       echo "✅ OpenCode CLI completed successfully (exit code: 0)"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      return 0
+      local probe_file
+      probe_file=$(mktemp /tmp/validation-report.candidate.XXXXXX)
+      chmod 600 "$probe_file"
+      if extract_report /tmp/validation-full-output.md opencode "$probe_file"; then
+        rm -f "$probe_file"
+        return 0
+      fi
+      rm -f "$probe_file"
+      echo "::warning::Incomplete final assistant report detected; retrying the whole review within configured limits"
+      retry_count=$((retry_count + 1))
+      if [ $retry_count -le "$max_retries" ]; then
+        local wait_time=$((2 ** retry_count))
+        echo "⏳ Retrying incomplete final report after ${wait_time} seconds..."
+        sleep_before_validation_retry "$wait_time" || return 2
+      else
+        echo "::error::Maximum retries reached. Validation failed (incomplete final report)."
+        return 2
+      fi
     else
       echo "❌ OpenCode CLI failed (exit code: $exit_code)"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -578,14 +641,12 @@ run_opencode() {
       failure_metadata=$(provider_error_metadata "opencode")
       echo "::notice::Provider failure metadata: $failure_metadata"
 
-      # OpenCode JSON events expose APIError retryability without requiring any
-      # message, response body, headers, URL, tool output, or transcript content
-      # to leave the runner. Use that field first; scan private files only when
-      # the CLI did not emit structured retryability metadata.
       local is_retryable=false
       local retryability
       retryability=$(metadata_retryable "$failure_metadata")
-      if [ "$retryability" = "true" ]; then
+      if [ "$exit_code" -eq 124 ] || [ "$exit_code" -eq 137 ]; then
+        is_retryable=true
+      elif [ "$retryability" = "true" ]; then
         is_retryable=true
       elif [ "$retryability" = "unknown" ] && grep -q -i -E "(429|503|504|530|timeout|rate[- ]?limit|provider returned error|unmapped|ECONNRESET|EAI_AGAIN|socket hang up|deadline exceeded)" \
          /tmp/validation-full-output.md /tmp/validation-provider-stderr.log 2>/dev/null; then
@@ -596,15 +657,14 @@ run_opencode() {
         retry_count=$((retry_count + 1))
 
         if [ $retry_count -le "$max_retries" ]; then
-          wait_time=$((2 ** retry_count))
+          local wait_time=$((2 ** retry_count))
           echo "⏳ Rate limit or timeout detected. Retrying after ${wait_time} seconds..."
-          sleep $wait_time
+          sleep_before_validation_retry "$wait_time" || return 2
         else
           echo "::error::Maximum retries reached. Validation failed (retryable)."
           return 2
         fi
       else
-        # Non-retryable error — caller should NOT fall back to a different provider.
         echo "::error::Non-retryable provider error occurred."
         return 1
       fi
@@ -726,6 +786,9 @@ EOF
   prompt_with_replacements=$(prepare_prompt "$actual_prompt_file")
   
   echo "Prompt prepared: $prompt_with_replacements"
+
+  # One shared deadline covers all primary attempts, backoff, and fallback.
+  ensure_validation_deadline
   
   # Run validation with the configured provider.
   # Use `|| rc=$?` (not `set +e`) because run_opencode/run_gemini toggle errexit
@@ -739,7 +802,7 @@ EOF
     # AND a fallback opencode-provider is configured. Non-retryable failures (rc=1)
     # bypass fallback because switching providers won't fix a malformed prompt/auth.
     if [ "$rc" -eq 2 ] && [ -n "${FALLBACK_OPENCODE_PROVIDER:-}" ] && [ -n "${FALLBACK_OPENCODE_MODEL:-}" ]; then
-      echo "::warning::Primary opencode/${OPENCODE_PROVIDER:-}/${OPENCODE_MODEL:-} exhausted retries on retryable errors. Falling back to ${FALLBACK_OPENCODE_PROVIDER}/${FALLBACK_OPENCODE_MODEL}."
+      echo "::warning::Primary opencode/${OPENCODE_PROVIDER:-}/${OPENCODE_MODEL:-} exhausted retries on retryable execution or final-report failures. Falling back to ${FALLBACK_OPENCODE_PROVIDER}/${FALLBACK_OPENCODE_MODEL}."
       rc=0
       run_opencode "$prompt_with_replacements" "${FALLBACK_OPENCODE_PROVIDER}" "${FALLBACK_OPENCODE_MODEL}" || rc=$?
     fi
