@@ -29,6 +29,13 @@
 - **DO NOT** make assumptions about code without reading it
 - **VERIFY** line numbers are accurate
 
+Read repository files directly within the checked-out workspace. Use read tools,
+`rg`, or `git --no-pager show` without copying files into `/tmp` or another
+external directory. Do not request broader tool permissions or retry a denied
+read through another tool. Action-owned grounding commands remain the only
+supported way to read newly discovered standards; if a required command or read
+is denied, report incomplete validation instead of assuming the missing evidence.
+
 ### ⚠️ ACCURATE REPORTING
 
 - **PROVIDE** exact file paths and line numbers
@@ -41,6 +48,11 @@
 ### CRITICAL: Start Your Output
 
 **START YOUR OUTPUT DIRECTLY WITH:** `# PR Validation Report`
+
+Return the complete report as your final assistant response on stdout. Do not
+write it to a file or return only a file path. The action extracts that final
+response, validates it, and publishes the report itself. Keep tool output and
+intermediate notes out of the final response.
 
 **DO NOT** include in your output:
 

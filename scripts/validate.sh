@@ -829,7 +829,7 @@ EOF
     echo "================================"
     echo "📊 Validation Results"
     echo "================================"
-    cat "/tmp/validation-report.md" | head -50
+    head -50 "/tmp/validation-report.md"
     echo ""
     echo "================================"
     echo "Status: $validation_status"
