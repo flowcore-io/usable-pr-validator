@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.8](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.7...v2.2.8) (2026-09-24)
+
+
+### Bug Fixes
+
+* enforce hard provider deadline ([6e597b6](https://github.com/flowcore-io/usable-pr-validator/commit/6e597b697ee86a356b6e616d25492f12dc4e62ac))
+* recover bounded incomplete final reports ([83e353b](https://github.com/flowcore-io/usable-pr-validator/commit/83e353bc7db42f9aae62092a92efaae8a89a0a09))
+* recover bounded incomplete final reports ([d34db58](https://github.com/flowcore-io/usable-pr-validator/commit/d34db581ba6517e2525f9a9cd709a2a8a98ed724))
+
 ## [2.2.7](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.6...v2.2.7) (2026-09-23)
 
 
