@@ -297,6 +297,18 @@ Instead of maintaining static prompt files, you can now fetch prompts dynamicall
 | `grounding-status` | Deterministic grounding result: `complete`, `incomplete`, or `not-required` |
 | `report-artifact-name` | Name of report artifact |
 
+PR comments are limited to 60,000 UTF-8 bytes, including their metadata. The
+action result and grounding status remain visible when a large report is
+excerpted. The complete validated report is uploaded first and linked from the
+comment; failed uploads are identified without claiming an artifact exists.
+Only the comment is shortened. Validation outcomes, failed grounding, and the
+complete report artifact are unchanged. Missing or malformed final assistant
+responses still fail validation and publish only the action's safe error report.
+
+Reviewers should read checkout files directly within the workspace and return
+the report in their final assistant response, without temporary-file copies or
+permission workarounds. Action-owned standards retrieval remains unchanged.
+
 ## 🎯 Usage Examples
 
 ### Minimal Setup (OpenCode - default)

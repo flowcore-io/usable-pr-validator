@@ -443,15 +443,36 @@ runs:
       run: |
         ${{ github.action_path }}/scripts/validate.sh
     
+    - name: Upload Validation Report
+      id: report-artifact
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.set-artifact-name.outputs.artifact_name }}
+        path: /tmp/validation-report.md
+        retention-days: ${{ fromJSON(inputs.artifact-retention-days) }}
+        if-no-files-found: warn
+
     - name: Post PR Comment
       if: inputs.comment-mode != 'none' && always()
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        VALIDATOR_ACTION_PATH: ${{ github.action_path }}
+        VALIDATOR_COMMENT_MODE: ${{ inputs.comment-mode }}
+        VALIDATOR_COMMENT_TITLE: ${{ inputs.comment-title }}
+        VALIDATOR_MODEL_INFO: ${{ inputs.provider == 'opencode' && format('{0}/{1}', inputs.opencode-provider, inputs.opencode-model) || format('Google Gemini {0}', inputs.gemini-model) }}
+        VALIDATOR_STANDARDS_SOURCE: ${{ inputs.mcp-server-url }}
+        VALIDATOR_STATUS: ${{ steps.validate.outputs.validation_status }}
+        VALIDATOR_STEP_OUTCOME: ${{ steps.validate.outcome }}
+        VALIDATOR_CRITICAL_ISSUES: ${{ steps.validate.outputs.critical_issues }}
+        VALIDATOR_GROUNDING_STATUS: ${{ steps.validate.outputs.grounding_status }}
+        VALIDATOR_ARTIFACT_URL: ${{ steps.report-artifact.outputs.artifact-url }}
+        VALIDATOR_ARTIFACT_NAME: ${{ steps.set-artifact-name.outputs.artifact_name }}
       with:
         github-token: ${{ github.token }}
         script: |
           const fs = require('fs');
-          const commentMode = '${{ inputs.comment-mode }}';
-          const commentTitle = '${{ inputs.comment-title }}';
+          const commentMode = process.env.VALIDATOR_COMMENT_MODE;
           const reportPath = '/tmp/validation-report.md';
           
           if (!fs.existsSync(reportPath)) {
@@ -460,22 +481,23 @@ runs:
           }
           
           const report = fs.readFileSync(reportPath, 'utf8');
-          // Create a unique marker based on the comment title
-          const markerId = commentTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-          const marker = `<!-- usable-pr-validator:${markerId} -->`;
-          
-          const provider = '${{ inputs.provider }}';
-          const modelInfo = provider === 'opencode'
-            ? '${{ inputs.opencode-provider }}/${{ inputs.opencode-model }}'
-            : 'Google Gemini ${{ inputs.gemini-model }}';
-
-          const commentBody = marker + '\n## 🤖 ' + commentTitle + '\n\n' +
-            report + '\n\n---\n<details>\n<summary>📊 Validation Statistics</summary>\n\n' +
-            '- **Model**: ' + modelInfo + '\n' +
-            '- **Standards Source**: ${{ inputs.mcp-server-url }}\n' +
-            '- **Commit**: ' + context.payload.pull_request.head.sha.substring(0, 7) + '\n' +
-            '- **Triggered by**: @' + context.actor + '\n\n' +
-            '</details>';
+          const path = require('path');
+          const { formatPrComment } = require(path.join(process.env.VALIDATOR_ACTION_PATH, 'scripts/format-pr-comment.cjs'));
+          const { marker, body: commentBody } = formatPrComment({
+            report,
+            title: process.env.VALIDATOR_COMMENT_TITLE,
+            modelInfo: process.env.VALIDATOR_MODEL_INFO,
+            standardsSource: process.env.VALIDATOR_STANDARDS_SOURCE,
+            validationStatus: process.env.VALIDATOR_STATUS,
+            validationOutcome: process.env.VALIDATOR_STEP_OUTCOME,
+            criticalIssues: process.env.VALIDATOR_CRITICAL_ISSUES,
+            groundingStatus: process.env.VALIDATOR_GROUNDING_STATUS,
+            artifactUrl: process.env.VALIDATOR_ARTIFACT_URL,
+            artifactName: process.env.VALIDATOR_ARTIFACT_NAME,
+            runUrl: `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            commit: context.payload.pull_request.head.sha,
+            actor: context.actor,
+          });
 
           const { data: comments } = await github.rest.issues.listComments({
             owner: context.repo.owner,
@@ -504,15 +526,6 @@ runs:
             });
             console.log('✅ Created new PR comment');
           }
-    
-    - name: Upload Validation Report
-      if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: ${{ steps.set-artifact-name.outputs.artifact_name }}
-        path: /tmp/validation-report.md
-        retention-days: ${{ fromJSON(inputs.artifact-retention-days) }}
-        if-no-files-found: warn
     
     - name: Cleanup Secrets
       if: always()
