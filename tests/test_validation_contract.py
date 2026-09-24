@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
@@ -258,7 +259,8 @@ publish_safe_error_report "The final assistant response was invalid."
         validation = (ROOT / "scripts" / "validate.sh").read_text()
         action = (ROOT / "action.yml").read_text()
         self.assertNotIn("| tee /tmp/validation-full-output.md", validation)
-        self.assertIn('timeout --signal=TERM --kill-after=5s "${remaining_seconds}s"', validation)
+        self.assertGreaterEqual(validation.count('timeout --signal=KILL "${remaining_seconds}s"'), 2)
+        self.assertNotIn("--kill-after=5s", validation)
         self.assertIn('gemini -y -m "$GEMINI_MODEL" --output-format json', validation)
         self.assertIn('opencode run --format json -m "$full_model"', validation)
         self.assertGreaterEqual(validation.count('< "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log'), 2)
@@ -634,7 +636,7 @@ echo "return_code=$rc"
             fake.write_text(
                 "#!/usr/bin/env bash\n"
                 f"printf x >> {counter!s}\n"
-                "trap 'exit 124' TERM\n"
+                "trap '' TERM\n"
                 "sleep 30\n"
             )
             fake.chmod(0o755)
@@ -649,13 +651,72 @@ rc=0
 run_opencode {prompt!s} openrouter openai/example || rc=$?
 echo "return_code=$rc"
 '''
+            started = time.monotonic()
             completed = subprocess.run(
-                ["bash", "-c", script], text=True, capture_output=True, check=False, timeout=8
+                ["bash", "-c", script], text=True, capture_output=True, check=False, timeout=4
             )
+            elapsed = time.monotonic() - started
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(counter.read_text(), "x")
             self.assertIn("return_code=2", completed.stdout)
             self.assertIn("Validation time limit exhausted", completed.stdout)
+            self.assertLess(elapsed, 3, f"hard deadline took {elapsed:.3f}s")
+
+    def test_configured_fallback_shares_hard_deadline_with_primary(self):
+        incomplete = [
+            {"type": "step_start", "part": {"type": "step-start", "messageID": "primary"}},
+            {"type": "tool_use", "part": {"type": "tool", "messageID": "primary", "state": {"status": "completed", "output": "private"}}},
+            {"type": "step_finish", "part": {"type": "step-finish", "messageID": "primary", "reason": "tool-calls"}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            prompt = temp / "prompt.md"
+            prompt.write_text("review")
+            calls = temp / "calls"
+            primary = temp / "primary.jsonl"
+            primary.write_text("".join(json.dumps(event) + "\n" for event in incomplete))
+            fake = temp / "opencode"
+            fake.write_text(
+                "#!/usr/bin/env bash\n"
+                "model=\n"
+                "while [ $# -gt 0 ]; do [ \"$1\" != -m ] || { model=$2; break; }; shift; done\n"
+                f"echo \"$model\" >> {calls!s}\n"
+                f"if [ \"$model\" = openrouter/openai/primary ]; then cat {primary!s}; exit 0; fi\n"
+                "trap '' TERM\n"
+                "sleep 30\n"
+            )
+            fake.chmod(0o755)
+            script = f'''set -euo pipefail
+export ACTION_PATH={ROOT!s}
+export VALIDATE_SH_LIBRARY_ONLY=true
+export PATH={temp!s}:$PATH
+export MAX_RETRIES=0
+export PROVIDER=opencode
+export OPENCODE_PROVIDER=openrouter
+export OPENCODE_MODEL=openai/primary
+export FALLBACK_OPENCODE_PROVIDER=anthropic
+export FALLBACK_OPENCODE_MODEL=claude-fallback
+export PROMPT_FILE={prompt!s}
+export VALIDATION_DEADLINE_EPOCH=$(( $(date +%s) + 2 ))
+source {ROOT / "scripts" / "validate.sh"}
+grounding_result() {{ printf '%s\\n' '{{"status":"not-required","required_count":0,"missing_required":[],"failed_attempts":[]}}'; }}
+verify_git_refs() {{ return 0; }}
+prepare_prompt() {{ printf '%s\\n' {prompt!s}; }}
+main
+'''
+            started = time.monotonic()
+            completed = subprocess.run(
+                ["bash", "-c", script], text=True, capture_output=True, check=False, timeout=5
+            )
+            elapsed = time.monotonic() - started
+            self.assertEqual(completed.returncode, 1, completed.stderr)
+            self.assertEqual(
+                calls.read_text().splitlines(),
+                ["openrouter/openai/primary", "anthropic/claude-fallback"],
+            )
+            self.assertIn("Falling back to anthropic/claude-fallback", completed.stdout)
+            self.assertIn("Validation execution failed", completed.stdout)
+            self.assertLess(elapsed, 4, f"primary and fallback exceeded shared deadline: {elapsed:.3f}s")
 
 
 if __name__ == "__main__":

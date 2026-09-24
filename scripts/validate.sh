@@ -492,7 +492,9 @@ run_gemini() {
     : > /tmp/validation-full-output.md
     : > /tmp/validation-provider-stderr.log
     chmod 600 /tmp/validation-full-output.md /tmp/validation-provider-stderr.log
-    timeout --signal=TERM --kill-after=5s "${remaining_seconds}s" \
+    # The shared deadline is hard: do not give a TERM-ignoring provider an
+    # additional grace period beyond the remaining validation budget.
+    timeout --signal=KILL "${remaining_seconds}s" \
       gemini -y -m "$GEMINI_MODEL" --output-format json \
       < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log
     local exit_code=$?
@@ -600,7 +602,9 @@ run_opencode() {
     : > /tmp/validation-full-output.md
     : > /tmp/validation-provider-stderr.log
     chmod 600 /tmp/validation-full-output.md /tmp/validation-provider-stderr.log
-    timeout --signal=TERM --kill-after=5s "${remaining_seconds}s" \
+    # The shared deadline is hard: do not give a TERM-ignoring provider an
+    # additional grace period beyond the remaining validation budget.
+    timeout --signal=KILL "${remaining_seconds}s" \
       opencode run --format json -m "$full_model" \
       < "$prompt_file" > /tmp/validation-full-output.md 2> /tmp/validation-provider-stderr.log
     local exit_code=$?
