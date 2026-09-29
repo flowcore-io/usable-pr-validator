@@ -369,13 +369,7 @@ jobs:
         if: always()
         run: |
           echo "Test result: ${{ steps.test-action.outcome }}"
-          if [ -f "/tmp/validation-full-output.md" ]; then
-            echo "::group::Full AI Output"
-            cat /tmp/validation-full-output.md
-            echo "::endgroup::"
-          else
-            echo "⚠️ No full output file found"
-          fi
+          # Never inspect private transcripts, including after cleanup failure.
 
   integration-test-documentation:
     name: Integration Test (Documentation)
@@ -491,13 +485,7 @@ jobs:
         if: always()
         run: |
           echo "Docs test result: ${{ steps.docs-action.outcome }}"
-          if [ -f "/tmp/validation-full-output.md" ]; then
-            echo "::group::Full AI Output"
-            cat /tmp/validation-full-output.md
-            echo "::endgroup::"
-          else
-            echo "⚠️ No full output file found"
-          fi
+          # Never inspect private transcripts, including after cleanup failure.
 
   integration-test-comment-revalidation:
     name: Integration Test (Comment Revalidation)
@@ -662,12 +650,7 @@ jobs:
             echo "⚠️ Prompt file not found - cannot verify override context"
           fi
           
-          # Check the validation output
-          if [ -f "/tmp/validation-full-output.md" ]; then
-            echo "::group::Validation Output"
-            cat /tmp/validation-full-output.md
-            echo "::endgroup::"
-          fi
+          # Never inspect private transcripts, including after cleanup failure.
 
   all-checks-passed:
     name: All Checks Passed

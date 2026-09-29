@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import textwrap
@@ -177,6 +178,28 @@ write_outputs error false 0 "$grounding_status"
                              ["critical_issues=0", "critical_issues=1"])
             self.assertEqual(self.parser.parse_report(public.read_text())["critical_issues"], 1)
             self.assertNotIn(SENTINEL, public.read_text() + result.stdout + result.stderr + outputs.read_text())
+
+    def test_workflow_diagnostics_do_not_dump_transcripts_if_cleanup_fails(self):
+        workflow = (ROOT / ".github/workflows/test.yml").read_text()
+        for name in ["Debug Test Results", "Debug Documentation Results", "Verify Override Context Was Included"]:
+            step = workflow.split(f"      - name: {name}\n", 1)[1]
+            lines = []
+            for line in step.split("        run: |\n", 1)[1].splitlines():
+                if line.strip() and not line.startswith("          "):
+                    break
+                lines.append(line)
+            script = textwrap.dedent("\n".join(lines))
+            script = re.sub(r"\$\{\{ steps\.[a-z-]+\.outcome }}", "failure", script)
+            with self.subTest(step=name), tempfile.TemporaryDirectory() as directory:
+                for filename in ["validation-full-output.md", "validation-prompt.txt"]:
+                    (Path(directory) / filename).write_text(SENTINEL)
+                # Retain private files to simulate failed cleanup. Execute the
+                # workflow's actual diagnostics in an isolated temporary path.
+                result = subprocess.run(["bash", "-c", script.replace("/tmp/", directory + "/")],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("failure", result.stdout)
+                self.assertNotIn(SENTINEL, result.stdout + result.stderr)
 
     def test_full_comments_remain_utf8_bounded_and_keep_result_and_link(self):
         options = {"title": "Synthetic validation", "report": "🧪" * 40000, "visibility": "full",
