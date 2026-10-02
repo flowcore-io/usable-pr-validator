@@ -27,6 +27,8 @@
 test-results/
 coverage/
 .nyc_output/
+__pycache__/
+*.py[cod]
 
 # Node.js (if adding any Node tooling later)
 node_modules/

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 echo "::group::Preparing Prompts for Validation"
 
@@ -28,7 +29,7 @@ FINAL_PROMPT_FILE="/tmp/dynamic-prompt.md"
 fetch_fragment_content() {
   local fragment_id="$1"
   
-  echo "Fetching fragment content: $fragment_id"
+  echo "Fetching fragment content from Usable" >&2
   
   local fetch_url="${USABLE_API_BASE}/v1/fragments/${fragment_id}"
   
@@ -43,33 +44,31 @@ fetch_fragment_content() {
   body=$(echo "$response" | sed '$d')
   
   if [ "$http_code" != "200" ]; then
-    echo "::error::Failed to fetch fragment content (HTTP $http_code)"
-    echo "Response: $body"
+    echo "::error::Failed to fetch fragment content from Usable" >&2
     return 1
   fi
   
   # Use jq to parse JSON and extract content field
   # Note: jq is pre-installed on GitHub Actions runners
   local content
-  if ! content=$(echo "$body" | jq -r '.content // empty' 2>&1); then
-    echo "::error::Failed to parse fragment JSON response"
-    echo "Error: $content"
+  if ! content=$(printf '%s\n' "$body" | jq -r '.content // empty' 2>/dev/null); then
+    echo "::error::Failed to parse fragment JSON response" >&2
     return 1
   fi
   
   if [ -z "$content" ]; then
-    echo "::error::Fragment content is empty"
+    echo "::error::Fragment content is empty" >&2
     return 1
   fi
   
-  echo "$content"
+  printf '%s\n' "$content"
 }
 
 # Function to fetch MCP system prompt
 fetch_mcp_system_prompt() {
   local workspace_id="$1"
   
-  echo "Fetching MCP system prompt for workspace: $workspace_id"
+  echo "Fetching MCP system prompt from Usable" >&2
   
   local fetch_url="${USABLE_API_BASE}/workspaces/${workspace_id}/mcp-system-prompt"
   
@@ -84,7 +83,7 @@ fetch_mcp_system_prompt() {
   body=$(echo "$response" | sed '$d')
   
   if [ "$http_code" != "200" ]; then
-    echo "::warning::Failed to fetch MCP system prompt (HTTP $http_code), continuing without it"
+    echo "::warning::Failed to fetch MCP system prompt from Usable" >&2
     return 1
   fi
   
@@ -92,7 +91,7 @@ fetch_mcp_system_prompt() {
   # Try to parse as JSON first using jq
   # Note: jq is pre-installed on GitHub Actions runners
   local content
-  content=$(echo "$body" | jq -r '.content // .prompt // empty' 2>/dev/null)
+  content=$(printf '%s\n' "$body" | jq -r '.content // .prompt // empty' 2>/dev/null)
   
   # If JSON parsing returned empty, use the body as-is (assuming plain text)
   if [ -z "$content" ]; then
@@ -101,11 +100,11 @@ fetch_mcp_system_prompt() {
   
   # Verify content is not empty after parsing
   if [ -z "$content" ]; then
-    echo "::warning::MCP system prompt content is empty after parsing."
+    echo "::warning::MCP system prompt content is empty after parsing." >&2
     return 1
   fi
   
-  echo "$content"
+  printf '%s\n' "$content"
 }
 
 # Main execution
@@ -129,6 +128,8 @@ main() {
     mcp_content=$(fetch_mcp_system_prompt "$WORKSPACE_ID")
     
     if [ -n "$mcp_content" ]; then
+      touch "$MCP_SYSTEM_PROMPT_FILE"
+      chmod 600 "$MCP_SYSTEM_PROMPT_FILE"
       echo "$mcp_content" > "$MCP_SYSTEM_PROMPT_FILE"
       has_mcp_system=true
       echo "✅ MCP system prompt fetched successfully"
@@ -157,6 +158,8 @@ main() {
     user_content=$(fetch_fragment_content "$PROMPT_FRAGMENT_ID")
     
     if [ -n "$user_content" ]; then
+      touch "$USER_PROMPT_FILE"
+      chmod 600 "$USER_PROMPT_FILE"
       echo "$user_content" > "$USER_PROMPT_FILE"
       has_user_prompt=true
       echo "✅ User prompt fetched successfully"
@@ -172,7 +175,10 @@ main() {
     
     if [ -n "$CUSTOM_PROMPT_FILE" ] && [ -f "$CUSTOM_PROMPT_FILE" ]; then
       echo "Using static prompt file: $CUSTOM_PROMPT_FILE"
+      touch "$USER_PROMPT_FILE"
+      chmod 600 "$USER_PROMPT_FILE"
       cp "$CUSTOM_PROMPT_FILE" "$USER_PROMPT_FILE"
+      chmod 600 "$USER_PROMPT_FILE"
       has_user_prompt=true
       echo "✅ Static prompt loaded"
       echo "Size: $(wc -c < "$USER_PROMPT_FILE") bytes"
@@ -187,6 +193,8 @@ main() {
   
   # Step 4: Merge prompts in order: hardcoded system → MCP system → user prompt
   echo "Merging prompts..."
+  touch "$FINAL_PROMPT_FILE"
+  chmod 600 "$FINAL_PROMPT_FILE"
   
   {
     if [ "$has_hardcoded_system" = true ]; then
@@ -211,11 +219,6 @@ main() {
   echo "✅ Prompts merged successfully"
   echo "Final prompt size: $(wc -c < "$FINAL_PROMPT_FILE") bytes"
   echo "Final prompt lines: $(wc -l < "$FINAL_PROMPT_FILE") lines"
-  
-  # Display preview (first 50 lines)
-  echo "::group::Final Prompt Preview (first 50 lines)"
-  head -50 "$FINAL_PROMPT_FILE" || true
-  echo "::endgroup::"
   
   echo "::endgroup::"
 }

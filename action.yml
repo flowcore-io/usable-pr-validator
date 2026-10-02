@@ -66,6 +66,10 @@ inputs:
     description: 'Days to retain validation report artifacts'
     required: false
     default: '30'
+  report-visibility:
+    description: 'metadata-only (safe default) publishes action-generated verdict/count/grounding only. full explicitly permits assistant prose in comments/artifacts: use only with non-confidential, publication-approved inputs.'
+    required: false
+    default: 'metadata-only'
   max-retries:
     description: 'Maximum retry attempts for retryable provider failures or incomplete final reports'
     required: false
@@ -135,71 +139,102 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Initialize report publication
+      id: publication
+      shell: bash
+      env:
+        REPORT_VISIBILITY: ${{ inputs.report-visibility }}
+      run: |
+        set -euo pipefail
+        umask 077
+        if [[ "$REPORT_VISIBILITY" != "metadata-only" && "$REPORT_VISIBILITY" != "full" ]]; then
+          echo "::error::Invalid report publication policy"
+          exit 1
+        fi
+        # Unique per composite invocation, before any setup failure can occur.
+        publication_dir=$(mktemp -d "${RUNNER_TEMP:-/tmp}/usable-publication.XXXXXX")
+        echo "report_path=${publication_dir}/report.md" >> "$GITHUB_OUTPUT"
+        echo "visibility=${REPORT_VISIBILITY}" >> "$GITHUB_OUTPUT"
+
     - name: Validate inputs
       shell: bash
+      env:
+        VALIDATOR_WORKSPACE_ID: ${{ inputs.workspace-id }}
+        VALIDATOR_PROMPT_FILE: ${{ inputs.prompt-file }}
+        VALIDATOR_DYNAMIC_PROMPTS: ${{ inputs.use-dynamic-prompts }}
+        VALIDATOR_COMMENT_MODE: ${{ inputs.comment-mode }}
+        VALIDATOR_MERGE_PROMPT: ${{ inputs.merge-custom-prompt }}
+        VALIDATOR_ALLOW_WEB_FETCH: ${{ inputs.allow-web-fetch }}
+        VALIDATOR_MAX_RETRIES: ${{ inputs.max-retries }}
+        VALIDATOR_TIMEOUT: ${{ inputs.timeout-minutes }}
+        VALIDATOR_PROVIDER: ${{ inputs.provider }}
+        VALIDATOR_OPENCODE_PROVIDER: ${{ inputs.opencode-provider }}
+        VALIDATOR_FALLBACK_PROVIDER: ${{ inputs.fallback-opencode-provider }}
+        VALIDATOR_FALLBACK_MODEL: ${{ inputs.fallback-opencode-model }}
+        VALIDATOR_FALLBACK_SECRET: ${{ inputs.fallback-opencode-api-key-secret }}
       run: |
         echo "::group::Validating inputs"
         
         # Check if workspace-id is provided
-        if [ -z "${{ inputs.workspace-id }}" ]; then
+        if [ -z "$VALIDATOR_WORKSPACE_ID" ]; then
           echo "::error::workspace-id is required"
           exit 1
         fi
         
         # Check if either prompt-file or use-dynamic-prompts is provided
-        if [ -z "${{ inputs.prompt-file }}" ] && [ "${{ inputs.use-dynamic-prompts }}" != "true" ]; then
+        if [ -z "$VALIDATOR_PROMPT_FILE" ] && [ "$VALIDATOR_DYNAMIC_PROMPTS" != "true" ]; then
           echo "::error::Either prompt-file must be provided or use-dynamic-prompts must be enabled"
           exit 1
         fi
         
         # Check if prompt file exists (only if provided)
-        if [ -n "${{ inputs.prompt-file }}" ] && [ ! -f "${{ inputs.prompt-file }}" ]; then
-          echo "::error::Prompt file not found: ${{ inputs.prompt-file }}"
+        if [ -n "$VALIDATOR_PROMPT_FILE" ] && [ ! -f "$VALIDATOR_PROMPT_FILE" ]; then
+          echo "::error::Prompt file not found"
           exit 1
         fi
         
         # Validate comment mode
-        if [[ ! "${{ inputs.comment-mode }}" =~ ^(update|new|none)$ ]]; then
+        if [[ ! "$VALIDATOR_COMMENT_MODE" =~ ^(update|new|none)$ ]]; then
           echo "::error::Invalid comment-mode. Must be: update, new, or none"
           exit 1
         fi
         
         # Validate boolean inputs
-        if [[ ! "${{ inputs.use-dynamic-prompts }}" =~ ^(true|false)$ ]]; then
+        if [[ ! "$VALIDATOR_DYNAMIC_PROMPTS" =~ ^(true|false)$ ]]; then
           echo "::error::Invalid use-dynamic-prompts. Must be: true or false"
           exit 1
         fi
         
-        if [[ ! "${{ inputs.merge-custom-prompt }}" =~ ^(true|false)$ ]]; then
+        if [[ ! "$VALIDATOR_MERGE_PROMPT" =~ ^(true|false)$ ]]; then
           echo "::error::Invalid merge-custom-prompt. Must be: true or false"
           exit 1
         fi
         
-        if [[ ! "${{ inputs.allow-web-fetch }}" =~ ^(true|false)$ ]]; then
+        if [[ ! "$VALIDATOR_ALLOW_WEB_FETCH" =~ ^(true|false)$ ]]; then
           echo "::error::Invalid allow-web-fetch. Must be: true or false"
           exit 1
         fi
 
-        if [[ ! "${{ inputs.max-retries }}" =~ ^[0-9]+$ ]] || [ "${{ inputs.max-retries }}" -gt 10 ]; then
+        if [[ ! "$VALIDATOR_MAX_RETRIES" =~ ^[0-9]+$ ]] || [ "$VALIDATOR_MAX_RETRIES" -gt 10 ]; then
           echo "::error::Invalid max-retries. Must be an integer from 0 to 10"
           exit 1
         fi
 
-        if [[ ! "${{ inputs.timeout-minutes }}" =~ ^[1-9][0-9]*$ ]] || [ "${{ inputs.timeout-minutes }}" -gt 360 ]; then
+        if [[ ! "$VALIDATOR_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || [ "$VALIDATOR_TIMEOUT" -gt 360 ]; then
           echo "::error::Invalid timeout-minutes. Must be an integer from 1 to 360"
           exit 1
         fi
 
         # Validate provider
-        if [[ ! "${{ inputs.provider }}" =~ ^(opencode|gemini)$ ]]; then
+        if [[ ! "$VALIDATOR_PROVIDER" =~ ^(opencode|gemini)$ ]]; then
           echo "::error::Invalid provider. Must be: opencode or gemini"
           exit 1
         fi
 
         # Validate fallback opencode-provider configuration
-        FALLBACK_PROV="${{ inputs.fallback-opencode-provider }}"
+        FALLBACK_PROV="$VALIDATOR_FALLBACK_PROVIDER"
         if [ -n "$FALLBACK_PROV" ]; then
-          if [ "${{ inputs.provider }}" != "opencode" ]; then
+          if [ "$VALIDATOR_PROVIDER" != "opencode" ]; then
             echo "::error::fallback-opencode-provider is only supported when provider=opencode"
             exit 1
           fi
@@ -207,32 +242,33 @@ runs:
             echo "::error::Invalid fallback-opencode-provider. Must be: openrouter, anthropic, or openai"
             exit 1
           fi
-          if [ -z "${{ inputs.fallback-opencode-model }}" ]; then
+          if [ -z "$VALIDATOR_FALLBACK_MODEL" ]; then
             echo "::error::fallback-opencode-model is required when fallback-opencode-provider is set"
             exit 1
           fi
-          if [ "$FALLBACK_PROV" != "${{ inputs.opencode-provider }}" ] && [ -z "${{ inputs.fallback-opencode-api-key-secret }}" ]; then
+          if [ "$FALLBACK_PROV" != "$VALIDATOR_OPENCODE_PROVIDER" ] && [ -z "$VALIDATOR_FALLBACK_SECRET" ]; then
             echo "::error::fallback-opencode-api-key-secret is required when fallback-opencode-provider differs from opencode-provider"
             exit 1
           fi
         fi
 
         echo "✅ All inputs validated successfully"
-        echo "  Provider: ${{ inputs.provider }}"
+        echo "  Provider: $VALIDATOR_PROVIDER"
         if [ -n "$FALLBACK_PROV" ]; then
-          echo "  Fallback: ${FALLBACK_PROV}/${{ inputs.fallback-opencode-model }}"
+          echo "  Fallback configured"
         fi
         echo "::endgroup::"
     
     - name: Set Artifact Name
       id: set-artifact-name
       shell: bash
+      env:
+        TITLE: ${{ inputs.comment-title }}
       run: |
         # Create a safe artifact name from the comment title
-        TITLE="${{ inputs.comment-title }}"
         SAFE_NAME=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
-        ARTIFACT_NAME="pr-validation-${SAFE_NAME}"
-        echo "artifact_name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
+        ARTIFACT_NAME="pr-validation-${SAFE_NAME:0:160}"
+        echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
         echo "📦 Artifact name: ${ARTIFACT_NAME}"
     
     - name: Setup Node.js
@@ -423,6 +459,8 @@ runs:
       id: validate
       shell: bash
       env:
+        VALIDATION_REPORT_PATH: ${{ steps.publication.outputs.report_path }}
+        REPORT_VISIBILITY: ${{ steps.publication.outputs.visibility }}
         PROMPT_FILE: ${{ inputs.prompt-file }}
         USE_DYNAMIC_PROMPTS: ${{ inputs.use-dynamic-prompts }}
         PROVIDER: ${{ inputs.provider }}
@@ -454,80 +492,79 @@ runs:
       run: |
         ${{ github.action_path }}/scripts/validate.sh
     
+    - name: Upload Validation Report
+      id: report-artifact
+      if: always() && steps.validate.outputs.report_ready == 'true' && steps.publication.outputs.report_path != ''
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.set-artifact-name.outputs.artifact_name }}
+        path: ${{ steps.publication.outputs.report_path }}
+        retention-days: ${{ fromJSON(inputs.artifact-retention-days) }}
+        if-no-files-found: error
+
     - name: Post PR Comment
-      if: inputs.comment-mode != 'none' && always()
+      if: always() && inputs.comment-mode != 'none' && steps.validate.outputs.report_ready == 'true' && steps.publication.outputs.report_path != ''
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        COMMENT_MODE: ${{ inputs.comment-mode }}
+        COMMENT_TITLE: ${{ inputs.comment-title }}
+        REPORT_PATH: ${{ steps.publication.outputs.report_path }}
+        REPORT_VISIBILITY: ${{ steps.publication.outputs.visibility }}
+        VALIDATION_STATUS: ${{ steps.validate.outputs.validation_status }}
+        VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
+        CRITICAL_ISSUES: ${{ steps.validate.outputs.critical_issues }}
+        GROUNDING_STATUS: ${{ steps.validate.outputs.grounding_status }}
+        ARTIFACT_URL: ${{ steps.report-artifact.outputs.artifact-url }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       with:
         github-token: ${{ github.token }}
         script: |
           const fs = require('fs');
-          const commentMode = '${{ inputs.comment-mode }}';
-          const commentTitle = '${{ inputs.comment-title }}';
-          const reportPath = '/tmp/validation-report.md';
-          
-          if (!fs.existsSync(reportPath)) {
-            console.log('⚠️ No validation report found to post');
-            return;
-          }
-          
-          const report = fs.readFileSync(reportPath, 'utf8');
-          // Create a unique marker based on the comment title
-          const markerId = commentTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-          const marker = `<!-- usable-pr-validator:${markerId} -->`;
-          
-          const provider = '${{ inputs.provider }}';
-          const modelInfo = provider === 'opencode'
-            ? '${{ inputs.opencode-provider }}/${{ inputs.opencode-model }}'
-            : 'Google Gemini ${{ inputs.gemini-model }}';
-
-          const commentBody = marker + '\n## 🤖 ' + commentTitle + '\n\n' +
-            report + '\n\n---\n<details>\n<summary>📊 Validation Statistics</summary>\n\n' +
-            '- **Model**: ' + modelInfo + '\n' +
-            '- **Standards Source**: ${{ inputs.mcp-server-url }}\n' +
-            '- **Commit**: ' + context.payload.pull_request.head.sha.substring(0, 7) + '\n' +
-            '- **Triggered by**: @' + context.actor + '\n\n' +
-            '</details>';
-
-          const { data: comments } = await github.rest.issues.listComments({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: context.payload.pull_request.number,
-          });
-          
-          const existingComment = comments.find(comment => 
-            comment.body.includes(marker)
-          );
-          
-          if (commentMode === 'update' && existingComment) {
-            await github.rest.issues.updateComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: existingComment.id,
-              body: commentBody,
+          const path = require('path');
+          const { formatPrComment } = require(path.join(process.env.ACTION_PATH, 'scripts/format-pr-comment.cjs'));
+          try {
+            const reportPath = process.env.REPORT_PATH;
+            if (!fs.lstatSync(reportPath).isFile()) throw new Error('report_not_regular');
+            const { marker, body } = formatPrComment({
+              title: process.env.COMMENT_TITLE,
+              visibility: process.env.REPORT_VISIBILITY,
+              // Do not even read prose into the commenter in metadata mode.
+              report: process.env.REPORT_VISIBILITY === 'full' ? fs.readFileSync(reportPath, 'utf8') : '',
+              validationStatus: process.env.VALIDATION_STATUS,
+              validationOutcome: process.env.VALIDATION_OUTCOME,
+              criticalIssues: process.env.CRITICAL_ISSUES,
+              groundingStatus: process.env.GROUNDING_STATUS,
+              artifactUrl: process.env.ARTIFACT_URL,
+              runUrl: process.env.RUN_URL,
             });
-            console.log('✅ Updated existing PR comment');
-          } else {
-            await github.rest.issues.createComment({
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              body: commentBody,
             });
-            console.log('✅ Created new PR comment');
+            const existing = comments.find(comment => comment.user?.type === 'Bot' && comment.body?.includes(marker));
+            if (process.env.COMMENT_MODE === 'update' && existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number, body,
+              });
+            }
+            core.info('Validation comment published.');
+          } catch {
+            // API errors can contain request bodies. Never print the exception.
+            core.setFailed('Validation comment publication failed.');
           }
-    
-    - name: Upload Validation Report
-      if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: ${{ steps.set-artifact-name.outputs.artifact_name }}
-        path: /tmp/validation-report.md
-        retention-days: ${{ fromJSON(inputs.artifact-retention-days) }}
-        if-no-files-found: warn
     
     - name: Cleanup Secrets
       if: always()
       shell: bash
+      env:
+        REPORT_PATH: ${{ steps.publication.outputs.report_path }}
       run: |
         # Remove temporary files containing sensitive data
         rm -f /tmp/service-account.json
@@ -542,6 +579,12 @@ runs:
         rm -f /tmp/usable-grounding-ledger.jsonl
         rm -f /tmp/usable-required-fragments.txt
         rm -f /tmp/usable-required-grounding.md
+        rm -f /tmp/mcp-system-prompt.md /tmp/user-prompt.md /tmp/dynamic-prompt.md /tmp/validation-prompt.txt
+        # Only this invocation's known file/directory, never a broad tmp cleanup.
+        if [ -n "$REPORT_PATH" ]; then
+          rm -f -- "$REPORT_PATH"
+          rmdir -- "$(dirname "$REPORT_PATH")" 2>/dev/null || true
+        fi
         echo "✅ Temporary files cleaned up"
     
     - name: Fail on Critical Violations

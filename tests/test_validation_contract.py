@@ -169,7 +169,9 @@ Validated.
         validation = (ROOT / "scripts" / "validate.sh").read_text()
         self.assertIn('mktemp /tmp/validation-report.candidate.XXXXXX', validation)
         self.assertNotIn('sed -n \'/^# PR Validation Report$/,$p\' "$full_output" > "$report_file"', validation)
-        self.assertIn('mv -f "$candidate_file" /tmp/validation-report.md', validation)
+        self.assertNotIn('mv -f "$candidate_file" /tmp/validation-report.md', validation)
+        self.assertIn('scripts/publish-validation-report.py', validation)
+        self.assertIn('--report "$candidate_file" --output "$REPORT_PATH"', validation)
         self.assertIn('publish_safe_error_report', validation)
 
     def test_orchestration_rejects_tool_pass_and_publishes_only_safe_error(self):
@@ -268,7 +270,8 @@ publish_safe_error_report "The final assistant response was invalid."
         self.assertNotIn("Upload Full Output", action)
         self.assertNotIn("artifact_name }}-full", action)
         self.assertNotIn("path: /tmp/validation-full-output.md", action)
-        self.assertIn("path: /tmp/validation-report.md", action)
+        self.assertIn("path: ${{ steps.publication.outputs.report_path }}", action)
+        self.assertNotIn("path: /tmp/validation-report.md", action)
 
     def test_opencode_assembles_only_multipart_text_from_terminal_step(self):
         earlier_pass = "# PR Validation Report\n## Validation Outcome\n- **Status**: PASS ✅\n- **Critical Issues**: 0"
