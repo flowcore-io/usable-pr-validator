@@ -20,9 +20,10 @@ fi
 
 USABLE_API_BASE="https://usable.dev/api"
 HARDCODED_SYSTEM_PROMPT="${ACTION_PATH}/system-prompt.md"
-MCP_SYSTEM_PROMPT_FILE="/tmp/mcp-system-prompt.md"
-USER_PROMPT_FILE="/tmp/user-prompt.md"
-FINAL_PROMPT_FILE="/tmp/dynamic-prompt.md"
+PROMPT_OUTPUT_DIR="${PROMPT_OUTPUT_DIR:-/tmp}"
+MCP_SYSTEM_PROMPT_FILE="${PROMPT_OUTPUT_DIR}/mcp-system-prompt.md"
+USER_PROMPT_FILE="${PROMPT_OUTPUT_DIR}/user-prompt.md"
+FINAL_PROMPT_FILE="${PROMPT_OUTPUT_DIR}/dynamic-prompt.md"
 
 # Function to fetch fragment content by ID
 fetch_fragment_content() {
@@ -69,14 +70,17 @@ fetch_fragment_content() {
 fetch_mcp_system_prompt() {
   local workspace_id="$1"
   
-  echo "Fetching MCP system prompt for workspace: $workspace_id"
+  echo "Fetching MCP system prompt for workspace: $workspace_id" >&2
   
   local fetch_url="${USABLE_API_BASE}/workspaces/${workspace_id}/mcp-system-prompt"
   
   local response
-  response=$(curl -s -w "\n%{http_code}" \
+  if ! response=$(curl -sS -w "\n%{http_code}" \
     -X GET "$fetch_url" \
-    -H "Authorization: Bearer $USABLE_API_TOKEN")
+    -H "Authorization: Bearer $USABLE_API_TOKEN"); then
+    echo "::warning::Failed to fetch optional MCP system prompt, continuing without it" >&2
+    return 1
+  fi
   
   local http_code
   http_code=$(echo "$response" | tail -n1)
@@ -84,7 +88,7 @@ fetch_mcp_system_prompt() {
   body=$(echo "$response" | sed '$d')
   
   if [ "$http_code" != "200" ]; then
-    echo "::warning::Failed to fetch MCP system prompt (HTTP $http_code), continuing without it"
+    echo "::warning::Failed to fetch MCP system prompt (HTTP $http_code), continuing without it" >&2
     return 1
   fi
   
@@ -101,7 +105,7 @@ fetch_mcp_system_prompt() {
   
   # Verify content is not empty after parsing
   if [ -z "$content" ]; then
-    echo "::warning::MCP system prompt content is empty after parsing."
+    echo "::warning::MCP system prompt content is empty after parsing." >&2
     return 1
   fi
   
@@ -126,13 +130,13 @@ main() {
   # Step 2: Fetch MCP system prompt from Usable API
   if [ "$HAS_API_TOKEN" = true ] && [ -n "$WORKSPACE_ID" ]; then
     local mcp_content
-    mcp_content=$(fetch_mcp_system_prompt "$WORKSPACE_ID")
-    
-    if [ -n "$mcp_content" ]; then
+    if mcp_content=$(fetch_mcp_system_prompt "$WORKSPACE_ID"); then
       echo "$mcp_content" > "$MCP_SYSTEM_PROMPT_FILE"
       has_mcp_system=true
       echo "✅ MCP system prompt fetched successfully"
       echo "Size: $(wc -c < "$MCP_SYSTEM_PROMPT_FILE") bytes"
+    else
+      echo "Continuing with the action system prompt and user prompt"
     fi
   else
     echo "Skipping MCP system prompt (no API token or workspace ID)"
