@@ -29,12 +29,12 @@ FINAL_PROMPT_FILE="${PROMPT_OUTPUT_DIR}/dynamic-prompt.md"
 fetch_fragment_content() {
   local fragment_id="$1"
   
-  echo "Fetching fragment content: $fragment_id"
+  echo "Fetching fragment content: $fragment_id" >&2
   
   local fetch_url="${USABLE_API_BASE}/v1/fragments/${fragment_id}"
   
   local response
-  response=$(curl -s -w "\n%{http_code}" \
+  response=$(curl -sS -w "\n%{http_code}" \
     -X GET "$fetch_url" \
     -H "Authorization: Bearer $USABLE_API_TOKEN")
   
@@ -44,8 +44,8 @@ fetch_fragment_content() {
   body=$(echo "$response" | sed '$d')
   
   if [ "$http_code" != "200" ]; then
-    echo "::error::Failed to fetch fragment content (HTTP $http_code)"
-    echo "Response: $body"
+    echo "::error::Failed to fetch fragment content (HTTP $http_code)" >&2
+    echo "Response: $body" >&2
     return 1
   fi
   
@@ -53,13 +53,13 @@ fetch_fragment_content() {
   # Note: jq is pre-installed on GitHub Actions runners
   local content
   if ! content=$(echo "$body" | jq -r '.content // empty' 2>&1); then
-    echo "::error::Failed to parse fragment JSON response"
-    echo "Error: $content"
+    echo "::error::Failed to parse fragment JSON response" >&2
+    echo "Error: $content" >&2
     return 1
   fi
   
   if [ -z "$content" ]; then
-    echo "::error::Fragment content is empty"
+    echo "::error::Fragment content is empty" >&2
     return 1
   fi
   

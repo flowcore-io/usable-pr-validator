@@ -771,15 +771,16 @@ EOF
   local actual_prompt_file=""
   
   # Check if fetch-prompt.sh created a merged/final prompt (takes precedence)
-  if [ -f "/tmp/dynamic-prompt.md" ]; then
+  local merged_prompt_file="${PROMPT_OUTPUT_DIR:-/tmp}/dynamic-prompt.md"
+  if [ -f "$merged_prompt_file" ]; then
     echo "Using prompt prepared by fetch-prompt.sh (includes system prompt if configured)"
-    actual_prompt_file="/tmp/dynamic-prompt.md"
+    actual_prompt_file="$merged_prompt_file"
   elif [ -n "$PROMPT_FILE" ] && [ -f "$PROMPT_FILE" ]; then
     echo "Using static prompt file: $PROMPT_FILE"
     actual_prompt_file="$PROMPT_FILE"
   else
     echo "::error::No valid prompt file found"
-    echo "  - Merged prompt exists: $([ -f "/tmp/dynamic-prompt.md" ] && echo "yes" || echo "no")"
+    echo "  - Merged prompt exists: $([ -f "$merged_prompt_file" ] && echo "yes" || echo "no")"
     echo "  - PROMPT_FILE: ${PROMPT_FILE:-not set}"
     echo "  - Custom prompt exists: $([ -n "$PROMPT_FILE" ] && [ -f "$PROMPT_FILE" ] && echo "yes" || echo "no")"
     exit 1

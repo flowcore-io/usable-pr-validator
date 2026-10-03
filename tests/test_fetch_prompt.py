@@ -11,7 +11,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class FetchPromptTests(unittest.TestCase):
-    def run_fetch(self, *, status="200", body='{"content":"MCP CONTEXT"}', curl_exit="0", dynamic=False):
+    def run_fetch(
+        self,
+        *,
+        mcp_status="200",
+        mcp_body='{"content":"MCP CONTEXT"}',
+        mcp_exit="0",
+        fragment_status="200",
+        fragment_body='{"content":"REAL USER PROMPT BODY"}',
+        fragment_exit="0",
+        dynamic=False,
+    ):
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
             bin_dir = temporary / "bin"
@@ -19,8 +29,15 @@ class FetchPromptTests(unittest.TestCase):
             fake_curl = bin_dir / "curl"
             fake_curl.write_text(
                 "#!/usr/bin/env bash\n"
-                "printf '%s\\n%s' \"$MOCK_CURL_BODY\" \"$MOCK_CURL_STATUS\"\n"
-                "exit \"$MOCK_CURL_EXIT\"\n"
+                "case \"$*\" in\n"
+                "  */mcp-system-prompt*)\n"
+                "    body=$MOCK_MCP_BODY; status=$MOCK_MCP_STATUS; rc=$MOCK_MCP_EXIT ;;\n"
+                "  */v1/fragments/*)\n"
+                "    body=$MOCK_FRAGMENT_BODY; status=$MOCK_FRAGMENT_STATUS; rc=$MOCK_FRAGMENT_EXIT ;;\n"
+                "  *) exit 99 ;;\n"
+                "esac\n"
+                "if [ \"$rc\" -ne 0 ]; then exit \"$rc\"; fi\n"
+                "printf '%s\\n%s' \"$body\" \"$status\"\n"
             )
             fake_curl.chmod(0o755)
             (temporary / "system-prompt.md").write_text("SYSTEM\n")
@@ -36,9 +53,12 @@ class FetchPromptTests(unittest.TestCase):
                 "USE_DYNAMIC_PROMPTS": "true" if dynamic else "false",
                 "PROMPT_FRAGMENT_ID": "test-fragment" if dynamic else "",
                 "CUSTOM_PROMPT_FILE": str(temporary / "source-user-prompt.md"),
-                "MOCK_CURL_BODY": body,
-                "MOCK_CURL_STATUS": status,
-                "MOCK_CURL_EXIT": curl_exit,
+                "MOCK_MCP_BODY": mcp_body,
+                "MOCK_MCP_STATUS": mcp_status,
+                "MOCK_MCP_EXIT": mcp_exit,
+                "MOCK_FRAGMENT_BODY": fragment_body,
+                "MOCK_FRAGMENT_STATUS": fragment_status,
+                "MOCK_FRAGMENT_EXIT": fragment_exit,
             }
             result = subprocess.run(
                 ["bash", str(ROOT / "scripts/fetch-prompt.sh")],
@@ -50,33 +70,57 @@ class FetchPromptTests(unittest.TestCase):
             )
             prompt_file = temporary / "dynamic-prompt.md"
             prompt = prompt_file.read_text() if prompt_file.exists() else None
-            return result, prompt
+            user_prompt_file = temporary / "user-prompt.md"
+            user_prompt = user_prompt_file.read_text() if user_prompt_file.exists() else None
+            return result, prompt, user_prompt
 
     def test_optional_http_failure_keeps_required_prompts(self):
-        result, prompt = self.run_fetch(status="503", body="unavailable")
+        result, prompt, _ = self.run_fetch(mcp_status="503", mcp_body="unavailable")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIsNotNone(prompt)
         self.assertIn("SYSTEM", prompt)
         self.assertIn("USER", prompt)
         self.assertNotIn("unavailable", prompt)
         self.assertIn("continuing without it", result.stderr)
 
     def test_optional_network_failure_keeps_required_prompts(self):
-        result, prompt = self.run_fetch(curl_exit="7")
+        result, prompt, _ = self.run_fetch(mcp_exit="7")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIsNotNone(prompt)
         self.assertIn("SYSTEM", prompt)
         self.assertIn("USER", prompt)
         self.assertNotIn("MCP CONTEXT", prompt)
 
     def test_successful_fetch_adds_only_prompt_content(self):
-        result, prompt = self.run_fetch()
+        result, prompt, _ = self.run_fetch()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIsNotNone(prompt)
         self.assertIn("MCP CONTEXT", prompt)
         self.assertNotIn("Fetching MCP", prompt)
 
     def test_required_dynamic_user_prompt_still_fails(self):
-        result, prompt = self.run_fetch(status="503", body="unavailable", dynamic=True)
+        result, prompt, _ = self.run_fetch(fragment_status="503", fragment_body="unavailable", dynamic=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIsNone(prompt)
+        self.assertIn("::error::Failed to fetch fragment content (HTTP 503)", result.stderr)
+
+    def test_dynamic_prompt_contains_only_fragment_body(self):
+        result, prompt, user_prompt = self.run_fetch(dynamic=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(user_prompt, "REAL USER PROMPT BODY\n")
+        self.assertIsNotNone(prompt)
+        self.assertIn("REAL USER PROMPT BODY", prompt)
+        self.assertNotIn("Fetching fragment content", prompt)
+
+    def test_optional_failure_does_not_block_required_dynamic_prompt(self):
+        result, prompt, user_prompt = self.run_fetch(mcp_status="503", mcp_body="unavailable", dynamic=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(user_prompt, "REAL USER PROMPT BODY\n")
+        self.assertIsNotNone(prompt)
+        self.assertIn("SYSTEM", prompt)
+        self.assertIn("REAL USER PROMPT BODY", prompt)
+        self.assertNotIn("unavailable", prompt)
+        self.assertIn("continuing without it", result.stderr)
 
 
 if __name__ == "__main__":
