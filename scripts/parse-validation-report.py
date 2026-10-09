@@ -74,6 +74,8 @@ def parse_report(text):
         raise ValueError("validation outcome must contain one status and one critical count")
     status = statuses[0]
     critical_issues = int(critical_counts[0])
+    if critical_issues > 1000:
+        raise ValueError("critical issue count exceeds the publication limit")
     if status == "PASS" and critical_issues != 0:
         raise ValueError("PASS cannot contain critical issues")
     # FAIL can reflect important findings or incomplete assessment without

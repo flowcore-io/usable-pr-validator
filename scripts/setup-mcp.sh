@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 echo "::group::Setting up MCP Server Integration"
 
@@ -36,6 +37,9 @@ if [ "$PROVIDER" = "opencode" ]; then
     PROVIDER_BLOCK="\"${OPENCODE_PROVIDER}\": {}"
   fi
 
+  # Restrict any existing config before writing credentials into it.
+  touch /tmp/opencode.json
+  chmod 600 /tmp/opencode.json
   # Create OpenCode configuration with MCP and provider settings
   cat > /tmp/opencode.json <<EOF
 {
@@ -66,23 +70,22 @@ EOF
   chmod 600 /tmp/opencode.json
 
   # Copy to repo root so opencode can find it (opencode reads from cwd)
+  touch ./opencode.json
+  chmod 600 ./opencode.json
   cp /tmp/opencode.json ./opencode.json
   chmod 600 ./opencode.json
 
   echo "✅ OpenCode MCP server configured"
-  echo "  URL: $MCP_URL"
   echo "  Model: ${OPENCODE_PROVIDER}/${OPENCODE_MODEL}"
   if [ -n "$FALLBACK_OPENCODE_PROVIDER" ] && [ "$FALLBACK_OPENCODE_PROVIDER" != "$OPENCODE_PROVIDER" ]; then
     echo "  Fallback provider enabled: ${FALLBACK_OPENCODE_PROVIDER}"
   fi
   echo "  Settings file: ./opencode.json"
 
-  # Debug: Show settings file content (mask token)
-  echo "  Configuration preview:"
-  sed 's/"Bearer [^"]*"/"Bearer ***MASKED***"/g' /tmp/opencode.json | sed 's/^/    /'
-
 else
   # Create Gemini settings file with MCP configuration
+  touch /tmp/gemini-settings.json
+  chmod 600 /tmp/gemini-settings.json
   cat > /tmp/gemini-settings.json <<EOF
 {
   "mcpServers": {
@@ -111,12 +114,8 @@ EOF
   fi
 
   echo "✅ Gemini MCP server configured"
-  echo "  URL: $MCP_URL"
   echo "  Settings file: /tmp/gemini-settings.json"
 
-  # Debug: Show settings file content (mask token)
-  echo "  Configuration preview:"
-  sed 's/"Bearer [^"]*"/"Bearer ***MASKED***"/g' /tmp/gemini-settings.json | sed 's/^/    /'
 fi
 
 echo "::endgroup::"

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 echo "::group::Running PR Validation"
 
@@ -7,28 +8,17 @@ SCRIPT_DIR="${ACTION_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 GROUNDING_LEDGER="${USABLE_GROUNDING_LEDGER:-/tmp/usable-grounding-ledger.jsonl}"
 REQUIRED_FRAGMENTS_FILE="${USABLE_REQUIRED_FRAGMENTS_FILE:-/tmp/usable-required-fragments.txt}"
 REQUIRED_GROUNDING_FILE="${USABLE_REQUIRED_GROUNDING_FILE:-/tmp/usable-required-grounding.md}"
+REPORT_PATH="${VALIDATION_REPORT_PATH:-/tmp/validation-report.md}"
+REPORT_VISIBILITY="${REPORT_VISIBILITY-metadata-only}"
+REPORT_READY=false
+REPORT_ERROR_COUNT=""
 
 publish_safe_error_report() {
-  local summary="${1:-Validation failed before a publishable report was available.}"
-  local safe_file
-  safe_file=$(mktemp /tmp/validation-report.safe.XXXXXX)
-  chmod 600 "$safe_file"
-  cat > "$safe_file" <<EOF
-# PR Validation Report
-
-## Summary
-$summary
-
-## Critical Violations ❌
-- [ ] **Validation infrastructure failure**: No validated assistant report is available for publication.
-
-## Validation Outcome
-- **Status**: FAIL ❌
-- **Critical Issues**: 1
-- **Important Issues**: 0
-- **Suggestions**: 0
-EOF
-  mv -f "$safe_file" /tmp/validation-report.md
+  # Callers may describe failures internally, but no supplied prose is public.
+  "$SCRIPT_DIR/scripts/publish-validation-report.py" --error \
+    --output "$REPORT_PATH" --grounding-status "${grounding_status:-incomplete}" || return 1
+  REPORT_READY=true
+  REPORT_ERROR_COUNT=1
 }
 
 write_outputs() {
@@ -36,12 +26,20 @@ write_outputs() {
   local validation_passed="$2"
   local critical_issues="$3"
   local grounding_status="$4"
+  if [ "$validation_status" = "error" ] && [ -n "$REPORT_ERROR_COUNT" ]; then
+    critical_issues="$REPORT_ERROR_COUNT"
+  fi
   if [ -n "${GITHUB_OUTPUT:-}" ]; then
     {
       echo "validation_status=$validation_status"
       echo "validation_passed=$validation_passed"
       echo "critical_issues=$critical_issues"
       echo "grounding_status=$grounding_status"
+      if [ "$REPORT_READY" = true ] && [ -f "$REPORT_PATH" ]; then
+        echo "report_ready=true"
+      else
+        echo "report_ready=false"
+      fi
     } >> "$GITHUB_OUTPUT"
   fi
 }
@@ -429,7 +427,9 @@ $(cat "$REQUIRED_GROUNDING_FILE")"
   fi
   
   # Write to temp file
-  echo "$PROMPT_CONTENT" > "$output_file"
+  touch "$output_file"
+  chmod 600 "$output_file"
+  printf '%s\n' "$PROMPT_CONTENT" > "$output_file"
   
   # Verify prompt is not empty
   if [ ! -s "$output_file" ]; then
@@ -728,7 +728,14 @@ parse_results() {
 # Main execution
 main() {
   local grounding_json grounding_rc=0 grounding_status
-  rm -f /tmp/validation-report.md /tmp/validation-report.candidate.* /tmp/validation-report.safe.*
+  REPORT_READY=false
+  REPORT_ERROR_COUNT=""
+  rm -f "$REPORT_PATH" /tmp/validation-report.candidate.* /tmp/validation-report.safe.*
+  if [[ "$REPORT_VISIBILITY" != "metadata-only" && "$REPORT_VISIBILITY" != "full" ]]; then
+    echo "::error::Invalid report publication policy"
+    write_outputs "error" "false" "0" "incomplete"
+    return 1
+  fi
   grounding_json=$(grounding_result) || grounding_rc=$?
   if [ "$grounding_rc" -eq 2 ]; then
     echo "::error::Grounding ledger is malformed"
@@ -737,26 +744,8 @@ main() {
   fi
   grounding_status=$(json_field "$grounding_json" status)
   if [ "${GROUNDING_PREFETCH_FAILED:-false}" = "true" ] || [ "$grounding_status" = "incomplete" ]; then
-    cat > /tmp/validation-report.md <<EOF
-# PR Validation Report
-
-## Summary
-Validation did not run because deterministic Usable grounding was incomplete.
-
-## Critical Violations ❌
-- [ ] **Validation infrastructure failure**: One or more declared required fragments could not be retrieved and verified.
-
-## Validation Outcome
-- **Status**: FAIL ❌
-- **Critical Issues**: 1
-- **Important Issues**: 0
-- **Suggestions**: 0
-EOF
-    "$SCRIPT_DIR/scripts/enforce-grounding-report.py" /tmp/validation-report.md \
-      --status incomplete \
-      --required-count "$(json_field "$grounding_json" required_count)" \
-      --missing-count "$(json_field "$grounding_json" missing_required)" \
-      --failed-count "$(json_field "$grounding_json" failed_attempts)"
+    grounding_status="incomplete"
+    publish_safe_error_report
     write_outputs "error" "false" "1" "incomplete"
     echo "::error::Validation execution stopped because required grounding is incomplete"
     exit 1
@@ -832,6 +821,7 @@ EOF
   else
     echo "::error::Full output file does not exist!"
     publish_safe_error_report "The provider did not produce structured output for validation."
+    write_outputs "error" "false" "1" "$grounding_status"
     exit 1
   fi
 
@@ -853,6 +843,7 @@ EOF
   if [ "$grounding_rc" -eq 2 ]; then
     echo "::error::Grounding ledger is malformed after validation"
     rm -f "$candidate_file"
+    grounding_status="incomplete"
     publish_safe_error_report "The grounding ledger became invalid after provider execution."
     write_outputs "error" "false" "0" "incomplete"
     exit 1
@@ -874,15 +865,24 @@ EOF
     write_outputs "error" "false" "0" "$grounding_status"
     exit 1
   fi
-  mv -f "$candidate_file" /tmp/validation-report.md
+  if ! "$SCRIPT_DIR/scripts/publish-validation-report.py" \
+      --report "$candidate_file" --output "$REPORT_PATH" \
+      --grounding-status "$grounding_status" --visibility "$REPORT_VISIBILITY"; then
+    rm -f "$candidate_file"
+    publish_safe_error_report
+    write_outputs "error" "false" "0" "$grounding_status"
+    return 1
+  fi
+  REPORT_READY=true
+  rm -f "$candidate_file"
   
   # Parse results and set outputs
   echo "Parsing validation results..."
   
   # Set GitHub outputs and get results
-  if [ -f "/tmp/validation-report.md" ]; then
+  if [ -f "$REPORT_PATH" ]; then
     # parse_results writes to GITHUB_OUTPUT and returns display values
-    results=$(parse_results "/tmp/validation-report.md")
+    results=$(parse_results "$REPORT_PATH")
     
     # Extract values for display (pipe-separated format)
     IFS='|' read -r validation_status validation_passed critical_issues <<< "$results"
@@ -897,7 +897,8 @@ EOF
     echo "================================"
     echo "📊 Validation Results"
     echo "================================"
-    cat "/tmp/validation-report.md" | head -50
+    # Never preview assistant prose, even for an explicit full-report caller.
+    echo "Report visibility: $REPORT_VISIBILITY"
     echo ""
     echo "================================"
     echo "Status: $validation_status"
@@ -923,4 +924,3 @@ EOF
 if [ "${VALIDATE_SH_LIBRARY_ONLY:-false}" != "true" ]; then
   main
 fi
-
