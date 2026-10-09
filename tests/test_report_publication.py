@@ -100,7 +100,7 @@ const fakeGithub = {rest: {issues: {
   createComment: async (value) => { posted = value.body; },
 }}};
 const localRequire = name => name === 'fs' ? fakeFs : require(name);
-const context = {repo: {owner: 'example', repo: 'project'}, runId: 1, actor: 'fixture',
+const context = {repo: {owner: 'example', repo: 'project'}, issue: {owner: 'example', repo: 'project', number: 7}, runId: 1, actor: 'fixture',
   payload: {pull_request: {head: {sha: 'a'.repeat(40)}, number: 7}}};
 const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
 new AsyncFunction('require', 'github', 'context', 'core', input.script)(

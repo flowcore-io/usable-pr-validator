@@ -74,9 +74,12 @@ jobs:
   check-trigger:
     name: Check Comment Trigger
     runs-on: ubuntu-latest
+    # Secrets are only exposed for trusted commenters. Random users and fork
+    # contributors must never be able to start a run.
     if: |
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@usable')
+      contains(github.event.comment.body, '@usable') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
     outputs:
       should-validate: ${{ steps.check.outputs.should-validate }}
       comment-body: ${{ steps.extract.outputs.comment-body }}
@@ -124,6 +127,13 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
+
+            // Fork PR contents must never run next to repository secrets.
+            const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
+            if (pr.data.head.repo?.full_name !== baseRepo) {
+              core.setFailed('Comment revalidation is not available for pull requests from forks.');
+              return;
+            }
             
             core.setOutput('base-ref', pr.data.base.ref);
             core.setOutput('head-ref', pr.data.head.ref);
@@ -133,6 +143,8 @@ jobs:
             core.info(`Base: ${pr.data.base.ref}`);
             core.info(`Head: ${pr.data.head.ref} (${pr.data.head.sha})`);
       
+      # The PR head is checked out as data for review only. The validator
+      # itself runs from a pinned release below, never from this checkout.
       - name: Checkout PR
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -290,19 +302,20 @@ jobs:
           PROMPT_BODY
       
       - name: Run Revalidation
-        uses: ./
+        uses: flowcore-io/usable-pr-validator@bc54f50a8a476d0ee9177cc50ef60603daeed896 # v2.2.9
         with:
           prompt-file: ${{ inputs.prompt-file || '.github/prompts/comment-revalidation.md' }}
           use-dynamic-prompts: ${{ inputs.use-dynamic-prompts || false }}
           prompt-fragment-id: ${{ inputs.prompt-fragment-id || '' }}
           workspace-id: ${{ inputs.workspace-id || '60c10ca2-4115-4c1a-b6d7-04ac39fd3938' }}
           base-ref: ${{ steps.base-ref.outputs.base-ref }}
+          head-ref: ${{ steps.pr.outputs.head-ref }}
           provider: ${{ inputs.provider || 'opencode' }}
           gemini-model: ${{ inputs.gemini-model || 'gemini-2.5-flash' }}
           opencode-provider: ${{ inputs.opencode-provider || 'openrouter' }}
           opencode-model: ${{ inputs.opencode-model || 'moonshotai/kimi-k2.5' }}
           comment-title: ${{ inputs.comment-title || '🔄 Revalidation (Comment Triggered)' }}
-          comment-mode: 'create'
+          comment-mode: 'new'
           fail-on-critical: ${{ inputs.fail-on-critical || false }}
           override-comment: ${{ needs.check-trigger.outputs.comment-body }}
         env:

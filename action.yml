@@ -541,7 +541,7 @@ runs:
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
+              issue_number: context.issue.number,
             });
             const existing = comments.find(comment => comment.user?.type === 'Bot' && comment.body?.includes(marker));
             if (process.env.COMMENT_MODE === 'update' && existing) {
@@ -551,7 +551,7 @@ runs:
             } else {
               await github.rest.issues.createComment({
                 owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number, body,
+                issue_number: context.issue.number, body,
               });
             }
             core.info('Validation comment published.');
