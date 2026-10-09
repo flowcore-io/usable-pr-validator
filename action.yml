@@ -67,9 +67,9 @@ inputs:
     required: false
     default: '30'
   report-visibility:
-    description: 'metadata-only (safe default) publishes action-generated verdict/count/grounding only. full explicitly permits assistant prose in comments/artifacts: use only with non-confidential, publication-approved inputs.'
+    description: 'full (default) publishes the validated assistant report in comments/artifacts. metadata-only publishes action-generated verdict/count/grounding only; use it for confidential repositories or Usable context.'
     required: false
-    default: 'metadata-only'
+    default: 'full'
   max-retries:
     description: 'Maximum retry attempts for retryable provider failures or incomplete final reports'
     required: false
@@ -160,6 +160,7 @@ runs:
       shell: bash
       env:
         VALIDATOR_WORKSPACE_ID: ${{ inputs.workspace-id }}
+        VALIDATOR_PROMPT_FRAGMENT_ID: ${{ inputs.prompt-fragment-id }}
         VALIDATOR_PROMPT_FILE: ${{ inputs.prompt-file }}
         VALIDATOR_DYNAMIC_PROMPTS: ${{ inputs.use-dynamic-prompts }}
         VALIDATOR_COMMENT_MODE: ${{ inputs.comment-mode }}
@@ -178,6 +179,17 @@ runs:
         # Check if workspace-id is provided
         if [ -z "$VALIDATOR_WORKSPACE_ID" ]; then
           echo "::error::workspace-id is required"
+          exit 1
+        fi
+
+        # IDs are interpolated into Usable API paths and MCP headers.
+        uuid_re='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        if [[ ! "$VALIDATOR_WORKSPACE_ID" =~ $uuid_re ]]; then
+          echo "::error::Invalid workspace-id. Must be a UUID"
+          exit 1
+        fi
+        if [ -n "$VALIDATOR_PROMPT_FRAGMENT_ID" ] && [[ ! "$VALIDATOR_PROMPT_FRAGMENT_ID" =~ $uuid_re ]]; then
+          echo "::error::Invalid prompt-fragment-id. Must be a UUID"
           exit 1
         fi
         
