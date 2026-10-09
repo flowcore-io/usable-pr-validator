@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.9](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.8...v2.2.9) (2026-10-09)
+
+
+### Bug Fixes
+
+* fetch prompts through current Usable API ([ea24f25](https://github.com/flowcore-io/usable-pr-validator/commit/ea24f250e99b103bd092e7a85728ba53a053cd27))
+
+
+### Miscellaneous
+
+* integrate current prompt API repair into publication candidate ([f6d50af](https://github.com/flowcore-io/usable-pr-validator/commit/f6d50af80e8705c1e61de0ac49ce9c8962a548cb))
+* reconcile confidentiality publication with current main ([41774b6](https://github.com/flowcore-io/usable-pr-validator/commit/41774b65339952fc72f481304d9608b4d089dca0))
+
 ## [2.2.8](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.7...v2.2.8) (2026-10-03)
 
 
