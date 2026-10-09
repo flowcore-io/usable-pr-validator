@@ -21,9 +21,10 @@ fi
 
 USABLE_API_BASE="https://usable.dev/api"
 HARDCODED_SYSTEM_PROMPT="${ACTION_PATH}/system-prompt.md"
-MCP_SYSTEM_PROMPT_FILE="/tmp/mcp-system-prompt.md"
-USER_PROMPT_FILE="/tmp/user-prompt.md"
-FINAL_PROMPT_FILE="/tmp/dynamic-prompt.md"
+PROMPT_OUTPUT_DIR="${PROMPT_OUTPUT_DIR:-/tmp}"
+MCP_SYSTEM_PROMPT_FILE="${PROMPT_OUTPUT_DIR}/mcp-system-prompt.md"
+USER_PROMPT_FILE="${PROMPT_OUTPUT_DIR}/user-prompt.md"
+FINAL_PROMPT_FILE="${PROMPT_OUTPUT_DIR}/dynamic-prompt.md"
 
 # Function to fetch fragment content by ID
 fetch_fragment_content() {
@@ -34,7 +35,7 @@ fetch_fragment_content() {
   local fetch_url="${USABLE_API_BASE}/v1/fragments/${fragment_id}"
   
   local response
-  response=$(curl -s -w "\n%{http_code}" \
+  response=$(curl -sS -w "\n%{http_code}" \
     -X GET "$fetch_url" \
     -H "Authorization: Bearer $USABLE_API_TOKEN")
   
@@ -73,9 +74,12 @@ fetch_mcp_system_prompt() {
   local fetch_url="${USABLE_API_BASE}/workspaces/${workspace_id}/mcp-system-prompt"
   
   local response
-  response=$(curl -s -w "\n%{http_code}" \
+  if ! response=$(curl -sS -w "\n%{http_code}" \
     -X GET "$fetch_url" \
-    -H "Authorization: Bearer $USABLE_API_TOKEN")
+    -H "Authorization: Bearer $USABLE_API_TOKEN"); then
+    echo "::warning::Failed to fetch optional MCP system prompt, continuing without it" >&2
+    return 1
+  fi
   
   local http_code
   http_code=$(echo "$response" | tail -n1)
@@ -125,15 +129,15 @@ main() {
   # Step 2: Fetch MCP system prompt from Usable API
   if [ "$HAS_API_TOKEN" = true ] && [ -n "$WORKSPACE_ID" ]; then
     local mcp_content
-    mcp_content=$(fetch_mcp_system_prompt "$WORKSPACE_ID")
-    
-    if [ -n "$mcp_content" ]; then
+    if mcp_content=$(fetch_mcp_system_prompt "$WORKSPACE_ID"); then
       touch "$MCP_SYSTEM_PROMPT_FILE"
       chmod 600 "$MCP_SYSTEM_PROMPT_FILE"
       echo "$mcp_content" > "$MCP_SYSTEM_PROMPT_FILE"
       has_mcp_system=true
       echo "✅ MCP system prompt fetched successfully"
       echo "Size: $(wc -c < "$MCP_SYSTEM_PROMPT_FILE") bytes"
+    else
+      echo "Continuing with the action system prompt and user prompt"
     fi
   else
     echo "Skipping MCP system prompt (no API token or workspace ID)"
