@@ -21,6 +21,8 @@ class FetchPromptTests(unittest.TestCase):
         fragment_body='{"success":true,"fragment":{"content":"REAL USER PROMPT BODY"},"metadata":"NOT PROMPT"}',
         fragment_exit="0",
         dynamic=False,
+        workspace_id="f3c9feef-b8e6-4a23-bda0-0d90cd5162d1",
+        fragment_id="a03af556-b85c-4073-8383-08ea7b2b3b8d",
     ):
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
@@ -49,9 +51,9 @@ class FetchPromptTests(unittest.TestCase):
                 "PROMPT_OUTPUT_DIR": str(temporary),
                 "MCP_SECRET_NAME": "MOCK_API_TOKEN",
                 "MOCK_API_TOKEN": "test-token",
-                "WORKSPACE_ID": "test-workspace",
+                "WORKSPACE_ID": workspace_id,
                 "USE_DYNAMIC_PROMPTS": "true" if dynamic else "false",
-                "PROMPT_FRAGMENT_ID": "test-fragment" if dynamic else "",
+                "PROMPT_FRAGMENT_ID": fragment_id if dynamic else "",
                 "CUSTOM_PROMPT_FILE": str(temporary / "source-user-prompt.md"),
                 "MOCK_MCP_BODY": mcp_body,
                 "MOCK_MCP_STATUS": mcp_status,
@@ -164,6 +166,22 @@ class FetchPromptTests(unittest.TestCase):
         result, _, _ = self.run_fetch(fragment_status="401", fragment_body="PRIVATE RESPONSE", dynamic=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("PRIVATE RESPONSE", result.stdout + result.stderr)
+
+    def test_non_uuid_fragment_id_fails_before_any_request(self):
+        for fragment_id in ("../workspaces/other/mcp-system-prompt", "a03af556?x=1", "not-a-uuid"):
+            with self.subTest(fragment_id=fragment_id):
+                result, prompt, user_prompt = self.run_fetch(dynamic=True, fragment_id=fragment_id)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIsNone(prompt)
+                self.assertIsNone(user_prompt)
+                self.assertIn("Invalid prompt fragment ID", result.stderr)
+
+    def test_non_uuid_workspace_id_skips_optional_system_prompt(self):
+        result, prompt, _ = self.run_fetch(workspace_id="../memory-fragments/other")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("MCP CONTEXT", prompt)
+        self.assertIn("USER", prompt)
+        self.assertIn("Invalid workspace ID", result.stderr)
 
 
 if __name__ == "__main__":

@@ -30,4 +30,15 @@ python3 -c 'import json; d=json.load(open("/tmp/opencode.json")); assert d["mcp"
 run_setup gemini
 python3 -c 'import json; d=json.load(open("/tmp/gemini-settings.json")); s=d["mcpServers"]["usable"]; assert "agentic-search-fragments" not in s.get("excludeTools", []); assert s["excludeTools"] == ["get-memory-fragment-content"]; assert s["headers"]["x-workspace-id"] == "f3c9feef-b8e6-4a23-bda0-0d90cd5162d1"'
 
+# Credentials with JSON metacharacters must stay intact, not break or inject keys.
+tricky_token='tok"en\\with","x-injected":"1'
+(
+  cd "$FIXTURE"
+  USABLE_API_TOKEN="$tricky_token" MCP_SECRET_NAME="USABLE_API_TOKEN" \
+    MCP_SERVER_URL="https://usable.dev/api/mcp" WORKSPACE_ID="f3c9feef-b8e6-4a23-bda0-0d90cd5162d1" \
+    PROVIDER=opencode OPENCODE_PROVIDER=openrouter OPENCODE_MODEL=test/model \
+    FALLBACK_OPENCODE_PROVIDER=anthropic "$ROOT/scripts/setup-mcp.sh" >/dev/null
+)
+TRICKY_TOKEN="$tricky_token" python3 -c 'import json, os; d=json.load(open("/tmp/opencode.json")); h=d["mcp"]["usable"]["headers"]; assert h == {"Authorization": "Bearer " + os.environ["TRICKY_TOKEN"], "x-workspace-id": "f3c9feef-b8e6-4a23-bda0-0d90cd5162d1"}, h; assert set(d["provider"]) == {"openrouter", "anthropic"}'
+
 echo "MCP fragment-content tool is disabled for OpenCode and Gemini while search remains available."

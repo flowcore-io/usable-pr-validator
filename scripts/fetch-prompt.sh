@@ -26,9 +26,19 @@ MCP_SYSTEM_PROMPT_FILE="${PROMPT_OUTPUT_DIR}/mcp-system-prompt.md"
 USER_PROMPT_FILE="${PROMPT_OUTPUT_DIR}/user-prompt.md"
 FINAL_PROMPT_FILE="${PROMPT_OUTPUT_DIR}/dynamic-prompt.md"
 
+# IDs become URL path segments next to the bearer token.
+is_uuid() {
+  [[ "$1" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+}
+
 # Function to fetch fragment content by ID
 fetch_fragment_content() {
   local fragment_id="$1"
+
+  if ! is_uuid "$fragment_id"; then
+    echo "::error::Invalid prompt fragment ID. Must be a UUID" >&2
+    return 1
+  fi
   
   echo "Fetching fragment content from Usable" >&2
   
@@ -71,6 +81,11 @@ fetch_fragment_content() {
 # Function to fetch MCP system prompt
 fetch_mcp_system_prompt() {
   local workspace_id="$1"
+
+  if ! is_uuid "$workspace_id"; then
+    echo "::warning::Invalid workspace ID, continuing without the MCP system prompt" >&2
+    return 1
+  fi
   
   echo "Fetching MCP system prompt from Usable" >&2
   
