@@ -45,6 +45,7 @@ class SetupPrivacyTests(unittest.TestCase):
         variables.update({
             "PATH": str(self.bin) + os.pathsep + variables.get("PATH", ""),
             "MCP_SECRET_NAME": "TEST_USABLE_TOKEN",
+            "PROMPT_OUTPUT_DIR": str(self.private),
             "WORKSPACE_ID": "f3c9feef-b8e6-4a23-bda0-0d90cd5162d1",
             "USE_DYNAMIC_PROMPTS": "false",
             "MOCK_MCP_BODY": "{}",

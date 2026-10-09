@@ -48,7 +48,7 @@ fetch_fragment_content() {
   body=$(echo "$response" | sed '$d')
   
   if [ "$http_code" != "200" ]; then
-    echo "::error::Failed to fetch fragment content from Usable" >&2
+    echo "::error::Failed to fetch fragment content (HTTP $http_code)" >&2
     return 1
   fi
   
@@ -90,7 +90,7 @@ fetch_mcp_system_prompt() {
   body=$(echo "$response" | sed '$d')
   
   if [ "$http_code" != "200" ]; then
-    echo "::warning::Failed to fetch MCP system prompt from Usable" >&2
+    echo "::warning::Failed to fetch MCP system prompt (HTTP $http_code), continuing without it" >&2
     return 1
   fi
   
