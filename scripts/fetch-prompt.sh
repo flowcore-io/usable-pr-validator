@@ -32,12 +32,15 @@ fetch_fragment_content() {
   
   echo "Fetching fragment content from Usable" >&2
   
-  local fetch_url="${USABLE_API_BASE}/v1/fragments/${fragment_id}"
+  local fetch_url="${USABLE_API_BASE}/memory-fragments/${fragment_id}"
   
   local response
-  response=$(curl -sS -w "\n%{http_code}" \
+  if ! response=$(curl -sS -w "\n%{http_code}" \
     -X GET "$fetch_url" \
-    -H "Authorization: Bearer $USABLE_API_TOKEN")
+    -H "Authorization: Bearer $USABLE_API_TOKEN"); then
+    echo "::error::Failed to fetch fragment content" >&2
+    return 1
+  fi
   
   local http_code
   http_code=$(echo "$response" | tail -n1)
@@ -52,7 +55,7 @@ fetch_fragment_content() {
   # Use jq to parse JSON and extract content field
   # Note: jq is pre-installed on GitHub Actions runners
   local content
-  if ! content=$(printf '%s\n' "$body" | jq -r '.content // empty' 2>/dev/null); then
+  if ! content=$(printf '%s\n' "$body" | jq -er 'select(.success == true) | .fragment.content | select(type == "string" and length > 0)' 2>/dev/null); then
     echo "::error::Failed to parse fragment JSON response" >&2
     return 1
   fi
@@ -91,23 +94,22 @@ fetch_mcp_system_prompt() {
     return 1
   fi
   
-  # The API might return JSON with a content field, or plain text
-  # Try to parse as JSON first using jq
-  # Note: jq is pre-installed on GitHub Actions runners
+  # Current workspace responses use systemPrompt; retain older text formats.
   local content
-  content=$(printf '%s\n' "$body" | jq -r '.content // .prompt // empty' 2>/dev/null)
-  
-  # If JSON parsing returned empty, use the body as-is (assuming plain text)
-  if [ -z "$content" ]; then
+  if printf '%s\n' "$body" | jq empty >/dev/null 2>&1; then
+    if ! content=$(printf '%s\n' "$body" | jq -er '.systemPrompt // .content // .prompt | select(type == "string" and length > 0)' 2>/dev/null); then
+      echo "::warning::MCP system prompt response has no nonempty text prompt, continuing without it" >&2
+      return 1
+    fi
+  else
+    # Preserve plain-text responses, but do not mistake malformed JSON for a prompt.
+    if [[ "$body" =~ ^[[:space:]]*[\{\[] ]] || [ -z "$body" ]; then
+      echo "::warning::Invalid MCP system prompt response, continuing without it" >&2
+      return 1
+    fi
     content="$body"
   fi
-  
-  # Verify content is not empty after parsing
-  if [ -z "$content" ]; then
-    echo "::warning::MCP system prompt content is empty after parsing." >&2
-    return 1
-  fi
-  
+
   printf '%s\n' "$content"
 }
 

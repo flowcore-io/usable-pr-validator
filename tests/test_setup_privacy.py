@@ -95,7 +95,7 @@ class SetupPrivacyTests(unittest.TestCase):
             PROMPT_FRAGMENT_ID="a03af556-b85c-4073-8383-08ea7b2b3b8d",
             TEST_USABLE_TOKEN="synthetic-token",
             MOCK_MCP_BODY=json.dumps({"content": mcp}),
-            MOCK_FRAGMENT_BODY=json.dumps({"content": fragment}),
+            MOCK_FRAGMENT_BODY=json.dumps({"success": True, "fragment": {"content": fragment}}),
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         for canary in (mcp, fragment):

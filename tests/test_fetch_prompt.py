@@ -15,10 +15,10 @@ class FetchPromptTests(unittest.TestCase):
         self,
         *,
         mcp_status="200",
-        mcp_body='{"content":"MCP CONTEXT"}',
+        mcp_body='{"success":true,"systemPrompt":"MCP CONTEXT","metadata":"NOT PROMPT"}',
         mcp_exit="0",
         fragment_status="200",
-        fragment_body='{"content":"REAL USER PROMPT BODY"}',
+        fragment_body='{"success":true,"fragment":{"content":"REAL USER PROMPT BODY"},"metadata":"NOT PROMPT"}',
         fragment_exit="0",
         dynamic=False,
     ):
@@ -32,7 +32,7 @@ class FetchPromptTests(unittest.TestCase):
                 "case \"$*\" in\n"
                 "  */mcp-system-prompt*)\n"
                 "    body=$MOCK_MCP_BODY; status=$MOCK_MCP_STATUS; rc=$MOCK_MCP_EXIT ;;\n"
-                "  */v1/fragments/*)\n"
+                "  *https://usable.dev/api/memory-fragments/*)\n"
                 "    body=$MOCK_FRAGMENT_BODY; status=$MOCK_FRAGMENT_STATUS; rc=$MOCK_FRAGMENT_EXIT ;;\n"
                 "  *) exit 99 ;;\n"
                 "esac\n"
@@ -121,6 +121,49 @@ class FetchPromptTests(unittest.TestCase):
         self.assertIn("REAL USER PROMPT BODY", prompt)
         self.assertNotIn("unavailable", prompt)
         self.assertIn("continuing without it", result.stderr)
+
+    def test_workspace_envelope_does_not_become_prompt_text(self):
+        result, prompt, _ = self.run_fetch()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("MCP CONTEXT", prompt)
+        self.assertNotIn("systemPrompt", prompt)
+        self.assertNotIn("NOT PROMPT", prompt)
+
+    def test_legacy_workspace_text_formats_remain_supported(self):
+        for body in ('{"content":"LEGACY"}', '{"prompt":"LEGACY"}', 'LEGACY'):
+            with self.subTest(body=body):
+                result, prompt, _ = self.run_fetch(mcp_body=body)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("LEGACY", prompt)
+
+    def test_invalid_optional_envelopes_do_not_become_prompt_text(self):
+        for body in ('{"success":true,"metadata":"NOT PROMPT"}', '{"systemPrompt":42}', '{"systemPrompt":""}', '{"systemPrompt":', 'false', 'null', ''):
+            with self.subTest(body=body):
+                result, prompt, user_prompt = self.run_fetch(mcp_body=body, dynamic=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(user_prompt, "REAL USER PROMPT BODY\n")
+                self.assertNotIn("NOT PROMPT", prompt)
+                self.assertNotIn("systemPrompt", prompt)
+                self.assertIn("continuing without it", result.stderr)
+
+    def test_invalid_required_fragment_envelopes_fail_closed(self):
+        for body in ('{"content":"LEGACY"}', '{"success":false,"fragment":{"content":"BAD"}}', '{"success":true,"fragment":{"content":42}}', '{"success":true,"fragment":{"content":""}}', 'not JSON'):
+            with self.subTest(body=body):
+                result, prompt, user_prompt = self.run_fetch(fragment_body=body, dynamic=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIsNone(prompt)
+                self.assertIsNone(user_prompt)
+
+    def test_required_fragment_network_failure_fails_closed(self):
+        result, prompt, _ = self.run_fetch(fragment_exit="7", dynamic=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIsNone(prompt)
+        self.assertIn("::error::Failed to fetch fragment content", result.stderr)
+
+    def test_fragment_failure_does_not_log_response_content(self):
+        result, _, _ = self.run_fetch(fragment_status="401", fragment_body="PRIVATE RESPONSE", dynamic=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("PRIVATE RESPONSE", result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
