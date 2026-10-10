@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.10](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.9...v2.2.10) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci:** complete comment revalidation context and check release pin freshness ([8c132df](https://github.com/flowcore-io/usable-pr-validator/commit/8c132df4fb321ba3e392bb319aa383d9ea8968e1))
+* **ci:** restrict comment revalidation to trusted authors and same-repo PRs ([066e31c](https://github.com/flowcore-io/usable-pr-validator/commit/066e31c1e367342cea8dd8906a71a1ac25fd508e))
+* **ci:** restrict comment revalidation to trusted authors and same-repo PRs ([db41e7c](https://github.com/flowcore-io/usable-pr-validator/commit/db41e7cc95962b038e5a66a2627a52d32ece6a68))
+* **report:** clarify visibility migration and stabilize default coverage ([62868ad](https://github.com/flowcore-io/usable-pr-validator/commit/62868adcded09f8e0a5a3432ad1431982c371ccb))
+* **report:** restore full report as the default publication mode ([9ba9ed0](https://github.com/flowcore-io/usable-pr-validator/commit/9ba9ed02f749dc40afe8e1d067b12e84c509eb7f))
+* roll back metadata-only default and harden Usable ID/config handling ([ced2153](https://github.com/flowcore-io/usable-pr-validator/commit/ced215360027bdea57e2a1c50821c49d32c1abac))
+* **security:** validate Usable IDs and build MCP config with jq ([1e2705c](https://github.com/flowcore-io/usable-pr-validator/commit/1e2705c590fce1d8c716b4bf68e3eb62fcfbdec3))
+
 ## [2.2.9](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.8...v2.2.9) (2026-10-09)
 
 
