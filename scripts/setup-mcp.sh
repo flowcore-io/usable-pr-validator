@@ -21,6 +21,11 @@ if [ -z "$MCP_TOKEN" ]; then
   exit 1
 fi
 
+if ! command -v jq &> /dev/null; then
+  echo "::error::jq is required but not found. Please install jq or use a GitHub Actions runner with jq pre-installed."
+  exit 1
+fi
+
 # Validate MCP URL (should be set by default now)
 if [ -z "$MCP_URL" ]; then
   echo "::error::MCP_URL is required when MCP is enabled"
@@ -28,43 +33,36 @@ if [ -z "$MCP_URL" ]; then
 fi
 
 if [ "$PROVIDER" = "opencode" ]; then
-  # Build provider block — include fallback as a second enabled provider when configured
-  # so opencode can route to it via `-m <fallback-provider>/<fallback-model>` without re-config.
+  # Build JSON with jq so tokens, URLs, and IDs are always escaped correctly.
+  # Include fallback as a second enabled provider when configured so opencode
+  # can route to it via `-m <fallback-provider>/<fallback-model>` without re-config.
   FALLBACK_OPENCODE_PROVIDER="${FALLBACK_OPENCODE_PROVIDER:-}"
-  if [ -n "$FALLBACK_OPENCODE_PROVIDER" ] && [ "$FALLBACK_OPENCODE_PROVIDER" != "$OPENCODE_PROVIDER" ]; then
-    PROVIDER_BLOCK="\"${OPENCODE_PROVIDER}\": {}, \"${FALLBACK_OPENCODE_PROVIDER}\": {}"
-  else
-    PROVIDER_BLOCK="\"${OPENCODE_PROVIDER}\": {}"
+  if [ "$FALLBACK_OPENCODE_PROVIDER" = "$OPENCODE_PROVIDER" ]; then
+    FALLBACK_OPENCODE_PROVIDER=""
   fi
 
   # Restrict any existing config before writing credentials into it.
   touch /tmp/opencode.json
   chmod 600 /tmp/opencode.json
   # Create OpenCode configuration with MCP and provider settings
-  cat > /tmp/opencode.json <<EOF
-{
-  "\$schema": "https://opencode.ai/config.json",
-  "provider": {
-    ${PROVIDER_BLOCK}
-  },
-  "model": "${OPENCODE_PROVIDER}/${OPENCODE_MODEL}",
-  "autoupdate": false,
-  "tools": {
-    "usable_get-memory-fragment-content": false
-  },
-  "mcp": {
-    "usable": {
-      "type": "remote",
-      "url": "${MCP_URL}",
-      "enabled": true,
-      "headers": {
-        "Authorization": "Bearer ${MCP_TOKEN}",
-        "x-workspace-id": "${WORKSPACE_ID:-}"
-      }
-    }
-  }
-}
-EOF
+  jq -n \
+    --arg provider "$OPENCODE_PROVIDER" \
+    --arg fallback "$FALLBACK_OPENCODE_PROVIDER" \
+    --arg model "${OPENCODE_PROVIDER}/${OPENCODE_MODEL}" \
+    --arg url "$MCP_URL" \
+    --arg auth "Bearer ${MCP_TOKEN}" \
+    --arg workspace "${WORKSPACE_ID:-}" \
+    '{
+      "$schema": "https://opencode.ai/config.json",
+      provider: ({($provider): {}} + (if $fallback == "" then {} else {($fallback): {}} end)),
+      model: $model,
+      autoupdate: false,
+      tools: {"usable_get-memory-fragment-content": false},
+      mcp: {usable: {
+        type: "remote", url: $url, enabled: true,
+        headers: {Authorization: $auth, "x-workspace-id": $workspace}
+      }}
+    }' > /tmp/opencode.json
 
   # Set restrictive permissions
   chmod 600 /tmp/opencode.json
@@ -86,20 +84,15 @@ else
   # Create Gemini settings file with MCP configuration
   touch /tmp/gemini-settings.json
   chmod 600 /tmp/gemini-settings.json
-  cat > /tmp/gemini-settings.json <<EOF
-{
-  "mcpServers": {
-    "usable": {
-      "httpUrl": "$MCP_URL",
-      "excludeTools": ["get-memory-fragment-content"],
-      "headers": {
-        "Authorization": "Bearer $MCP_TOKEN",
-        "x-workspace-id": "${WORKSPACE_ID:-}"
-      }
-    }
-  }
-}
-EOF
+  jq -n \
+    --arg url "$MCP_URL" \
+    --arg auth "Bearer ${MCP_TOKEN}" \
+    --arg workspace "${WORKSPACE_ID:-}" \
+    '{mcpServers: {usable: {
+      httpUrl: $url,
+      excludeTools: ["get-memory-fragment-content"],
+      headers: {Authorization: $auth, "x-workspace-id": $workspace}
+    }}}' > /tmp/gemini-settings.json
 
   # Set restrictive permissions
   chmod 600 /tmp/gemini-settings.json

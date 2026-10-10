@@ -38,6 +38,17 @@ def private_report(status="PASS", count=0):
 
 
 class ReportPrivacyTests(unittest.TestCase):
+    def test_action_default_publishes_full_report(self):
+        # 2.2.9 briefly defaulted to metadata-only; that breaking change was rolled back.
+        lines = (ROOT / "action.yml").read_text().splitlines()
+        start = lines.index("  report-visibility:")
+        rest = lines[start + 1:]
+        end = next((i for i, line in enumerate(rest)
+                    if re.match(r"^  [\w-]+:", line)), len(rest))
+        defaults = [line.strip().split(":", 1)[1].strip().strip("\"'")
+                    for line in rest[:end] if line.startswith("    default:")]
+        self.assertEqual(defaults, ["full"])
+
     @classmethod
     def setUpClass(cls):
         cls.publisher = load("publisher", "publish-validation-report.py")
