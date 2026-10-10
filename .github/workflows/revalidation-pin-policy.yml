@@ -1,0 +1,33 @@
+name: Revalidation Release Pin
+
+on:
+  release:
+    types: [published]
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/comment-revalidation.yml'
+      - '.github/workflows/revalidation-pin-policy.yml'
+      - 'scripts/check-revalidation-pin.py'
+
+permissions:
+  contents: read
+
+jobs:
+  check-pin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check latest stable release pin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: flowcore-io/usable-pr-validator
+        run: |
+          release_tag=$(gh release view --json tagName --jq .tagName)
+          release_sha=$(gh api "repos/$GH_REPO/commits/$release_tag" --jq .sha)
+          python3 scripts/check-revalidation-pin.py \
+            --release-tag "$release_tag" --release-sha "$release_sha"

@@ -14,7 +14,9 @@ jobs:
       github.event.issue.pull_request &&
       contains(github.event.comment.body, '@usable') &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
-    uses: flowcore/usable-pr-validator/.github/workflows/comment-revalidation.yml@v1
+    # Upgrade to a release containing the trusted revalidation/context fixes.
+    # v2.2.9 is the currently published release and lacks those fixes.
+    uses: flowcore-io/usable-pr-validator/.github/workflows/comment-revalidation.yml@v2.2.9
     with:
       workspace-id: 'your-workspace-uuid-here'  # REQUIRED: Your Usable workspace ID
       prompt-file: '.github/prompts/pr-validation.md'  # Optional: Path to your prompt
@@ -24,6 +26,7 @@ jobs:
       # comment-title: '🔄 Revalidation'  # Optional: Customize comment title
       # fail-on-critical: false  # Optional: Fail build on critical issues
     secrets:
+      OPENCODE_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
       USABLE_API_TOKEN: ${{ secrets.USABLE_API_TOKEN }}
     permissions:
