@@ -483,12 +483,12 @@ runs:
         FALLBACK_OPENCODE_MODEL: ${{ inputs.fallback-opencode-model }}
         MAX_RETRIES: ${{ inputs.max-retries }}
         VALIDATION_TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
-        PR_TITLE: ${{ github.event.pull_request.title }}
-        PR_DESCRIPTION: ${{ github.event.pull_request.body }}
-        PR_URL: ${{ github.event.pull_request.html_url }}
-        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-        PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ', ') }}
+        PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        PR_TITLE: ${{ github.event.pull_request.title || github.event.issue.title }}
+        PR_DESCRIPTION: ${{ github.event.pull_request.body || github.event.issue.body }}
+        PR_URL: ${{ github.event.pull_request.html_url || github.event.issue.html_url }}
+        PR_AUTHOR: ${{ github.event.pull_request.user.login || github.event.issue.user.login }}
+        PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ', ') || join(github.event.issue.labels.*.name, ', ') }}
         BASE_BRANCH: ${{ inputs.base-ref || github.event.pull_request.base.ref }}
         HEAD_BRANCH: ${{ inputs.head-ref || github.event.pull_request.head.ref }}
         OVERRIDE_COMMENT: ${{ inputs.override-comment }}
@@ -553,7 +553,7 @@ runs:
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
+              issue_number: context.issue.number,
             });
             const existing = comments.find(comment => comment.user?.type === 'Bot' && comment.body?.includes(marker));
             if (process.env.COMMENT_MODE === 'update' && existing) {
@@ -563,7 +563,7 @@ runs:
             } else {
               await github.rest.issues.createComment({
                 owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number, body,
+                issue_number: context.issue.number, body,
               });
             }
             core.info('Validation comment published.');

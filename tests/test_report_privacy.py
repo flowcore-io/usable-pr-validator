@@ -148,7 +148,7 @@ const github = {rest: {issues: {
   listComments: async () => ({data: []}),
   createComment: async request => {throw new Error(process.env.CANARY + JSON.stringify(request));}
 }}};
-const context = {repo: {owner: 'example', repo: 'repo'}, payload: {pull_request: {number: 1}}};
+const context = {repo: {owner: 'example', repo: 'repo'}, issue: {owner: 'example', repo: 'repo', number: 1}, payload: {pull_request: {number: 1}}};
 new AsyncFunction('require', 'github', 'context', 'core', process.argv[1])(require, github, context, core)
   .then(() => process.stdout.write(JSON.stringify(messages)));
 """

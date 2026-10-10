@@ -76,4 +76,19 @@ printf '%s\n' '          ${{ needs.check-trigger.outputs.comment-body }}' >> "$f
 expect_rejected 'untrusted comment interpolation into shell' "$fixture"
 rm -rf "$fixture"
 
+fixture=$(make_fixture)
+sed -i.bak '/github.event.comment.author_association/d' "$fixture/.github/workflows/comment-revalidation.yml"
+expect_rejected 'comment trigger without author association gate' "$fixture"
+rm -rf "$fixture"
+
+fixture=$(make_fixture)
+sed -i.bak 's/pr.data.head.repo?.full_name !== baseRepo/false/' "$fixture/.github/workflows/comment-revalidation.yml"
+expect_rejected 'comment revalidation accepting fork pull requests' "$fixture"
+rm -rf "$fixture"
+
+fixture=$(make_fixture)
+sed -i.bak 's#uses: flowcore-io/usable-pr-validator@[0-9a-f]\{40\} \# v[0-9.]*#uses: ./#' "$fixture/.github/workflows/comment-revalidation.yml"
+expect_rejected 'comment revalidation running pull request action code' "$fixture"
+rm -rf "$fixture"
+
 echo 'Workflow policy rejects moving dependencies, legacy credentials, broad permissions, and unverified downloads.'

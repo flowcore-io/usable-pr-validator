@@ -604,10 +604,11 @@ on:
 
 jobs:
   revalidate:
-    # Only run if comment is on a PR and mentions @usable
+    # Only run for trusted commenters on a PR who mention @usable
     if: |
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@usable')
+      contains(github.event.comment.body, '@usable') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
     
     # Use the reusable workflow - it handles everything!
     uses: flowcore-io/usable-pr-validator/.github/workflows/comment-revalidation.yml@v2.2.4
@@ -637,6 +638,12 @@ jobs:
 - ✅ Running validation with override context
 - ✅ Posting results as a comment
 - ✅ Adding reaction emoji to acknowledge
+
+> **Security**: Comment revalidation runs with your secrets, so only comments from `OWNER`, `MEMBER`, or `COLLABORATOR` authors start it, and pull requests from forks are refused. The validator runs from a pinned release, never from the pull request checkout. Keep the `author_association` condition in your caller workflow too: reusable workflow versions before this fix do not enforce it. Organization members whose membership is private can show up as `CONTRIBUTOR`. Make the membership public, or add them as collaborators.
+
+> **Access behavior**: `COLLABORATOR` includes read-only and triage collaborators; this gate does not require write permission. A trusted comment on a fork PR fails explicitly before checkout rather than silently skipping.
+
+> **Release pin maintenance**: After publishing a stable release, update the full SHA and version comment in `.github/workflows/comment-revalidation.yml` to that release commit. `Revalidation Release Pin` checks both against GitHub's latest published stable release on publication, daily, and when its policy files change. v2.2.9 predates the comment publication and PR-context fixes in this PR; comment revalidation needs a release containing them before it works end to end. Update caller/template reusable-workflow refs to that release too. Shared `latest` promotion remains a separate protected operation.
 
 > **Tip**: Copy `templates/comment-revalidation-workflow.yml` for a ready-to-use template
 

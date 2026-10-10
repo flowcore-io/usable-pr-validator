@@ -123,6 +123,17 @@ if grep -F -q '          ${{ needs.check-trigger.outputs.comment-body }}' "$REVA
   fail 'untrusted comment body must not be interpolated into a shell script'
 fi
 
+for required_trust_value in \
+  'contains(fromJSON('\''["OWNER", "MEMBER", "COLLABORATOR"]'\''), github.event.comment.author_association)' \
+  'pr.data.head.repo?.full_name !== baseRepo'; do
+  grep -F -q "$required_trust_value" "$REVALIDATION_WORKFLOW" \
+    || fail "comment revalidation trust boundary is missing: $required_trust_value"
+done
+
+if grep -E -q '^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]+\./' "$REVALIDATION_WORKFLOW"; then
+  fail 'comment revalidation must not run action code from the pull request checkout'
+fi
+
 opencode_alias_count=$(grep -F -c 'OPENCODE_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}' "$TEST_WORKFLOW" || true)
 if [ "$opencode_alias_count" -ne 3 ]; then
   fail "expected three integration jobs to alias OPENROUTER_API_KEY, found $opencode_alias_count"
