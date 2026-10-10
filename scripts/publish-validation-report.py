@@ -96,6 +96,7 @@ def main(argv=None):
     parser = SafeArgumentParser(description=__doc__)
     parser.add_argument("--report")
     parser.add_argument("--output", required=True)
+    # Standalone calls fail closed; action.yml always passes its validated visibility input.
     parser.add_argument("--visibility", default="metadata-only")
     parser.add_argument("--grounding-status", default="incomplete")
     parser.add_argument("--error", action="store_true")

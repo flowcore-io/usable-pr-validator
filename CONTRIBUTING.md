@@ -73,6 +73,16 @@ Be respectful, inclusive, and constructive in all interactions.
 
 ### Local Testing
 
+The synthetic Python suite needs Python 3, Node.js, Bash, `jq`, and GNU `timeout` on `PATH`. It uses fake provider executables and needs no provider credentials. On macOS, install GNU coreutils and expose its commands before running the suite:
+
+```bash
+brew install coreutils
+export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+python3 -m unittest discover -s tests
+```
+
+Without GNU `timeout`, the OpenCode fixtures fail before the fake CLI runs, even when a real OpenCode installation is present.
+
 ```bash
 # Clone your fork
 git clone https://github.com/YOUR_USERNAME/usable-pr-validator.git

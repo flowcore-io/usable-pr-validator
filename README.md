@@ -24,6 +24,8 @@
 
 ## 🚀 Quick Start (5 Minutes)
 
+Self-hosted runners need `jq` on `PATH` to generate the MCP JSON configuration; it is preinstalled on GitHub-hosted runners.
+
 ### Prerequisites
 
 **For OpenCode (default, supports OpenRouter, Anthropic, OpenAI):**
@@ -501,7 +503,7 @@ The action isolates only the provider's completed final assistant response befor
 
 ### Publication boundary
 
-**The default public report is the full validated report** (`report-visibility: full`), as before v2.2.9. v2.2.9 briefly changed the default to `metadata-only`. That breaking change was rolled back, so upgrading needs no migration. Parsing a valid final answer does not certify its prose as non-confidential, so confidential repositories should opt in to `report-visibility: metadata-only`. It constructs a new report from fixed action-owned text, the PASS/FAIL verdict, a bounded critical-issue count (0–1000), and the independently enforced grounding status. It never copies assistant summaries, findings, source excerpts, links, filenames, or retrieved standards into the report. Unknown visibility values, invalid UTF-8, oversized reports, invalid counts, and inconsistent grounding fail closed. The input report limit is 1 MiB.
+**The default public report is the full validated report** (`report-visibility: full`), as before v2.2.9. v2.2.9 briefly changed the default to `metadata-only`. The rollback preserves the default for consumers on v2.2.8 or earlier. **If you pinned v2.2.9 and rely on its metadata-only default, set `report-visibility: metadata-only` explicitly before upgrading; otherwise detailed assistant reports will resume in comments and artifacts.** Parsing a valid final answer does not certify its prose as non-confidential, so confidential repositories should opt in to `report-visibility: metadata-only`. It constructs a new report from fixed action-owned text, the PASS/FAIL verdict, a bounded critical-issue count (0–1000), and the independently enforced grounding status. It never copies assistant summaries, findings, source excerpts, links, filenames, or retrieved standards into the report. Unknown visibility values, invalid UTF-8, oversized reports, invalid counts, and inconsistent grounding fail closed. The input report limit is 1 MiB.
 
 Comments, artifacts, and action outputs use this publication boundary; the log never previews assistant prose. Comments also independently ignore supplied report text in metadata mode. `comment-mode: none` disables only comments, **not** artifacts. Each composite invocation has a unique report path and an explicit ready flag, so a setup failure cannot publish a previous invocation's report. Artifacts upload before comments; comments retain the action verdict and artifact link within a 60,000-byte UTF-8 limit.
 
