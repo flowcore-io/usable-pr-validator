@@ -70,6 +70,14 @@ inputs:
     description: 'full (default) publishes the validated assistant report in comments/artifacts. metadata-only publishes action-generated verdict/count/grounding only; use it for confidential repositories or Usable context.'
     required: false
     default: 'full'
+  encrypted-report-recipient:
+    description: 'Opt-in PEM RSA certificate for encrypting the validated final report. Keep the private key off the runner. Requires matching SHA256; authorize encrypted export before enabling.'
+    required: false
+    default: ''
+  encrypted-report-recipient-sha256:
+    description: 'Trusted SHA256 of the recipient certificate DER (64 hex characters). Required with encrypted-report-recipient; never derive from PR-controlled input.'
+    required: false
+    default: ''
   max-retries:
     description: 'Maximum retry attempts for retryable provider failures or incomplete final reports'
     required: false
@@ -473,6 +481,8 @@ runs:
       env:
         VALIDATION_REPORT_PATH: ${{ steps.publication.outputs.report_path }}
         REPORT_VISIBILITY: ${{ steps.publication.outputs.visibility }}
+        ENCRYPTED_REPORT_RECIPIENT: ${{ inputs.encrypted-report-recipient }}
+        ENCRYPTED_REPORT_RECIPIENT_SHA256: ${{ inputs.encrypted-report-recipient-sha256 }}
         PROMPT_FILE: ${{ inputs.prompt-file }}
         USE_DYNAMIC_PROMPTS: ${{ inputs.use-dynamic-prompts }}
         PROVIDER: ${{ inputs.provider }}
@@ -504,6 +514,15 @@ runs:
       run: |
         ${{ github.action_path }}/scripts/validate.sh
     
+    - name: Upload Encrypted Final Report
+      if: always() && steps.validate.outputs.encrypted_report_ready == 'true' && steps.publication.outputs.report_path != ''
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.set-artifact-name.outputs.artifact_name }}-encrypted
+        path: ${{ steps.publication.outputs.report_path }}.cms
+        retention-days: 1
+        if-no-files-found: error
+
     - name: Upload Validation Report
       id: report-artifact
       if: always() && steps.validate.outputs.report_ready == 'true' && steps.publication.outputs.report_path != ''
@@ -594,7 +613,7 @@ runs:
         rm -f /tmp/mcp-system-prompt.md /tmp/user-prompt.md /tmp/dynamic-prompt.md /tmp/validation-prompt.txt
         # Only this invocation's known file/directory, never a broad tmp cleanup.
         if [ -n "$REPORT_PATH" ]; then
-          rm -f -- "$REPORT_PATH"
+          rm -f -- "$REPORT_PATH" "${REPORT_PATH}.cms"
           rmdir -- "$(dirname "$REPORT_PATH")" 2>/dev/null || true
         fi
         echo "✅ Temporary files cleaned up"

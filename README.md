@@ -1069,3 +1069,59 @@ MIT License - see [LICENSE](LICENSE) for details.
 - 💬 [Discussions](https://github.com/flowcore-io/usable-pr-validator/discussions)
 
 Made with ❤️ by [Flowcore](https://flowcore.io)
+
+### Opt-in encrypted final-report diagnostics
+
+Confidential consumers can keep `report-visibility: metadata-only` while exporting
+an encrypted copy of the **validated final report** for an authorized recipient.
+This is disabled by default. It does not export raw provider transcripts, change
+verdicts, relax grounding, or retain plaintext after the action's cleanup.
+
+Authorize this encrypted export before enabling it. Configure these inputs from
+trusted workflow/repository variables, never PR-controlled content:
+
+```yaml
+with:
+  report-visibility: metadata-only
+  encrypted-report-recipient: ${{ vars.VALIDATION_RECIPIENT_CERTIFICATE }}
+  encrypted-report-recipient-sha256: ${{ vars.VALIDATION_RECIPIENT_SHA256 }}
+```
+
+The recipient is one PEM X.509 RSA certificate (3072–8192 bits). The second input
+is its independently verified SHA-256 DER fingerprint, 64 hexadecimal characters
+without colons. Keep the corresponding private key **off the runner and out of
+GitHub/repository files**. Certificate validity, fingerprint and key size are
+checked; self-signed certificates are allowed because trust comes from the pinned
+fingerprint, not a CA chain. OpenSSL 3.x is required when this option is enabled.
+
+Before discarding its validated candidate, the action encrypts it as CMS DER
+AuthEnvelopedData using AES-256-GCM and RSA-OAEP/SHA-256. It uploads only the
+ciphertext as `<report-artifact-name>-encrypted`, with retention set to **one day**.
+The ordinary artifact/comment obeys `report-visibility` unchanged. Opt-in
+configuration/encryption failures fail the action without a plaintext fallback.
+No encrypted artifact is produced when validation never yields a valid final
+report. Reports that pass are also encrypted when enabled. Disable both inputs
+when diagnosis is finished; repository administrators may delete artifacts early.
+Retention does not revoke downloaded copies or the recipient's access.
+
+Decrypt only on the authorized recipient's machine, with OpenSSL 3.x. A failed GCM
+authentication can leave partial output; use a private temporary file and move it
+only on successful exit:
+
+```sh
+umask 077
+plain_tmp=$(mktemp)
+if openssl cms -decrypt -binary -inform DER -in report.md.cms \
+    -recip recipient.pem -inkey private.pem -out "$plain_tmp"; then
+  mv "$plain_tmp" decrypted-report.md
+else
+  rm -f "$plain_tmp"
+  exit 1
+fi
+```
+
+Decrypted reports are untrusted model output, not commands or approval. Verify the
+artifact's workflow/run/head provenance and investigate the cited code. Encryption
+protects confidentiality and ciphertext integrity; it does not authenticate a
+reviewer's identity or make a finding correct. Do not paste decrypted content into
+public comments, logs, or a public validator PR.

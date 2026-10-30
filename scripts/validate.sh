@@ -874,6 +874,19 @@ main() {
     return 1
   fi
   REPORT_READY=true
+  # Encrypt only the strictly validated final candidate, never a provider transcript.
+  # Opt-in failure remains a failed action; no plaintext diagnostic fallback.
+  if [ -n "${ENCRYPTED_REPORT_RECIPIENT:-}" ] || [ -n "${ENCRYPTED_REPORT_RECIPIENT_SHA256:-}" ]; then
+    if ! python3 "$SCRIPT_DIR/scripts/encrypt-validation-report.py" \
+        --report "$candidate_file" --output "${REPORT_PATH}.cms"; then
+      rm -f "$candidate_file" "${REPORT_PATH}.cms"
+      write_outputs "error" "false" "1" "$grounding_status"
+      return 1
+    fi
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+      echo "encrypted_report_ready=true" >> "$GITHUB_OUTPUT"
+    fi
+  fi
   rm -f "$candidate_file"
   
   # Parse results and set outputs
