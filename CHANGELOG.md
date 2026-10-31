@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.10...v2.3.0) (2026-10-31)
+
+
+### Features
+
+* add opt-in encrypted final report diagnostics ([f0ac1be](https://github.com/flowcore-io/usable-pr-validator/commit/f0ac1be6d47fe90de47b55643a9fb6afc610aa10))
+* add opt-in encrypted final report diagnostics ([1e39081](https://github.com/flowcore-io/usable-pr-validator/commit/1e39081095278bc7674c67a7580fee6718e0ae97))
+
+
+### Bug Fixes
+
+* **diagnostics:** :bug: classify opaque provider failures ([#61](https://github.com/flowcore-io/usable-pr-validator/issues/61)) ([299b307](https://github.com/flowcore-io/usable-pr-validator/commit/299b30732dcf003f5661d3379c1960823384ba96))
+
 ## [2.2.10](https://github.com/flowcore-io/usable-pr-validator/compare/v2.2.9...v2.2.10) (2026-10-10)
 
 
