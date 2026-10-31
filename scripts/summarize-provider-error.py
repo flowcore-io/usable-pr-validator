@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
+import os
+import re
+import stat
 from typing import Any
 
 ALLOWED_ERROR_NAMES = {
@@ -34,6 +36,60 @@ ALLOWED_ERROR_CODES = {
     "usage_not_included",
 }
 
+MAX_INPUT_BYTES = 16 * 1024 * 1024
+MAX_MESSAGE_CHARS = 65536
+# Labels only: never return matched text, arbitrary codes, paths or identifiers.
+CATEGORY_PATTERNS = {
+    "context_limit": r"context_length_exceeded|maximum context length|exceeds? (?:the )?context window",
+    "auth": r"invalid[ _]api[ _]key|authentication_error|unauthorized",
+    "quota": r"insufficient[ _](?:credits|quota)|quota exceeded",
+    "rate_limit": r"rate[ _]limit",
+    "model_unavailable": r"model_not_found|no endpoints found|model (?:is )?not (?:found|supported)",
+    "unsupported_parameter": r"unsupported (?:parameter|value)|does not support (?:temperature|top_p)",
+    "unsupported_api": r"UnsupportedApiError|unsupported API for",
+    "invalid_schema": r"invalid (?:JSON )?schema|invalid function name",
+    "local_transport": r"fetch failed|ECONNREFUSED|ENOTFOUND|ECONNRESET",
+    "local_io": r"\bENOENT\b|\bEACCES\b|\bEPERM\b",
+    "response_validation": r"(?:AI_)?TypeValidationError|InvalidResponseDataError",
+}
+
+
+def _categories(error: dict[str, Any]) -> set[str]:
+    categories: set[str] = set()
+
+    def inspect(value: Any, depth: int = 0) -> None:
+        if depth > 8:
+            return
+        if isinstance(value, dict):
+            for key in ("message", "responseBody", "data", "error", "cause"):
+                if key in value:
+                    inspect(value[key], depth + 1)
+        elif isinstance(value, str) and len(value) <= MAX_MESSAGE_CHARS:
+            if value.lstrip().startswith("{"):
+                try:
+                    inspect(json.loads(value), depth + 1)
+                    return
+                except (ValueError, RecursionError):
+                    pass
+            for category, pattern in CATEGORY_PATTERNS.items():
+                if re.search(pattern, value, re.IGNORECASE):
+                    categories.add(category)
+
+    inspect(error)
+    return categories or {"unknown"}
+
+
+def _read_private_input(path: str) -> str:
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_INPUT_BYTES:
+            raise ValueError("unavailable")
+        data = stream.read(MAX_INPUT_BYTES + 1)
+    if len(data) > MAX_INPUT_BYTES:
+        raise ValueError("unavailable")
+    return data.decode("utf-8", errors="replace")
+
 
 def _error_object(event: Any) -> dict[str, Any] | None:
     if not isinstance(event, dict) or event.get("type") != "error":
@@ -57,13 +113,14 @@ def summarize(provider: str, stdout_text: str, stderr_text: str) -> dict[str, An
     retryable_values: list[bool] = []
     malformed_lines = 0
     error_events = 0
+    categories: set[str] = set()
 
     for line in stdout_text.splitlines():
         if not line.strip():
             continue
         try:
             event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
+        except (ValueError, TypeError, RecursionError):
             malformed_lines += 1
             continue
 
@@ -71,6 +128,7 @@ def summarize(provider: str, stdout_text: str, stderr_text: str) -> dict[str, An
         if error is None:
             continue
         error_events += 1
+        categories.update(_categories(error))
 
         name = error.get("name")
         if isinstance(name, str):
@@ -121,6 +179,7 @@ def summarize(provider: str, stdout_text: str, stderr_text: str) -> dict[str, An
         "missing_fields": sorted(missing_fields),
         "stdout_present": bool(stdout_text),
         "stderr_present": bool(stderr_text),
+        "failure_categories": sorted(categories),
     }
 
 
@@ -131,8 +190,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stderr-file", required=True)
     args = parser.parse_args(argv)
 
-    stdout_text = Path(args.stdout_file).read_text(encoding="utf-8", errors="replace")
-    stderr_text = Path(args.stderr_file).read_text(encoding="utf-8", errors="replace")
+    try:
+        stdout_text = _read_private_input(args.stdout_file)
+        stderr_text = _read_private_input(args.stderr_file)
+    except (OSError, ValueError):
+        metadata = summarize(args.provider, "", "")
+        metadata["failure_categories"] = ["input_unavailable"]
+        print(json.dumps(metadata, sort_keys=True, separators=(",", ":")))
+        return 0
     print(json.dumps(summarize(args.provider, stdout_text, stderr_text), sort_keys=True, separators=(",", ":")))
     return 0
 
