@@ -270,7 +270,7 @@ After documenting the deviation:
    - ✅ **Read the current state** of files that changed (respecting Status)
    - ✅ **Focus on the modified line ranges** mentioned in the summary
    - ✅ **Check related files** when you need context
-   - ❌ **Do NOT try to run `git diff`** - you already have the change list
+   - ✅ Use the supplied change list, and verify the full base-to-head PR diff with read-only Git commands when scope or repository rules require it. Never substitute the latest commit for the whole PR.
    - ❌ **Do NOT try to read DELETED files** - respect the Status annotation
 
    **Example workflow:**

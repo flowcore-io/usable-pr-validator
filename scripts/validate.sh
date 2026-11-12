@@ -391,7 +391,7 @@ ${OVERRIDE_COMMENT}
   if [ "${ALLOW_WEB_FETCH:-false}" = "true" ]; then
     web_fetch_policy="**Web fetch is ENABLED** for this validation. You may use the \`web_fetch\` tool to retrieve external resources if needed for validation (e.g., checking external documentation, standards, or references). Use this capability responsibly and only when necessary."
   else
-    web_fetch_policy="**Web fetch is DISABLED** for this validation. DO NOT use the \`web_fetch\` tool or attempt to download content from URLs. All validation must be performed using only the git repository contents, PR context, and Usable MCP knowledge base."
+    web_fetch_policy="**Web fetch is DISABLED** for this validation. DO NOT use the \`web_fetch\` tool for general external browsing. Read-only GitHub API GET requests for exact-head repository CI evidence are allowed; no external source downloads or GitHub mutations are authorized. Use repository contents, PR context and Usable grounding for standards."
   fi
 
   # Read prompt template
@@ -409,6 +409,14 @@ ${OVERRIDE_COMMENT}
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_URL\}\}/${PR_URL}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_AUTHOR\}\}/${PR_AUTHOR}}"
   PROMPT_CONTENT="${PROMPT_CONTENT//\{\{PR_LABELS\}\}/${PR_LABELS:-none}}"
+
+  if [ "${REQUIRE_COMPLETE_ASSESSMENT:-false}" = true ]; then
+    PROMPT_CONTENT="${PROMPT_CONTENT}
+
+## Assessment completion contract
+Add exactly one line in Validation Outcome: - **Assessment**: COMPLETE or - **Assessment**: INCOMPLETE.
+COMPLETE means the assigned whole-PR review and required evidence are assessed, independently of PASS/FAIL. A completed review with legitimate findings must still say COMPLETE and FAIL. Unassessed material areas require INCOMPLETE and FAIL. Missing or INCOMPLETE status retries the review within the existing shared deadline and fallback policy, never becomes PASS."
+  fi
 
   if [ -f "$REQUIRED_GROUNDING_FILE" ]; then
     PROMPT_CONTENT="${PROMPT_CONTENT}
@@ -443,6 +451,29 @@ $(cat "$REQUIRED_GROUNDING_FILE")"
   fi
   
   echo "$output_file"
+}
+
+# Capture before extraction or the next retry truncates the private files.
+PROVIDER_ATTEMPT_COUNT=0
+capture_provider_attempt() {
+  local prompt_file="$1" provider="$2" model="$3" exit_code="$4"
+  if [ -z "${ENCRYPTED_ATTEMPT_RECIPIENT:-}${ENCRYPTED_ATTEMPT_RECIPIENT_SHA256:-}" ]; then
+    return 0
+  fi
+  PROVIDER_ATTEMPT_COUNT=$((PROVIDER_ATTEMPT_COUNT + 1))
+  local directory="${REPORT_PATH}.attempts"
+  mkdir -p "$directory"
+  chmod 700 "$directory"
+  if ! python3 "$SCRIPT_DIR/scripts/capture-provider-attempt.py" \
+    --prompt "$prompt_file" --stdout /tmp/validation-full-output.md \
+    --stderr /tmp/validation-provider-stderr.log --provider "$provider" \
+    --model "$model" --attempt "$PROVIDER_ATTEMPT_COUNT" --exit-code "$exit_code" \
+    --output "$directory/attempt-${PROVIDER_ATTEMPT_COUNT}.cms"; then
+    return 1
+  fi
+  if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    echo "attempt_diagnostics_ready=true" >> "$GITHUB_OUTPUT"
+  fi
 }
 
 # Run Gemini validation with retry logic
@@ -500,6 +531,7 @@ run_gemini() {
     local exit_code=$?
     
     set -e  # Re-enable exit on error
+    capture_provider_attempt "$prompt_file" gemini "$GEMINI_MODEL" "$exit_code" || return 1
     
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -507,6 +539,21 @@ run_gemini() {
     if [ $exit_code -eq 0 ]; then
       echo "✅ Gemini CLI completed successfully (exit code: 0)"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      if [ "${REQUIRE_COMPLETE_ASSESSMENT:-false}" = true ]; then
+        local probe_file
+        probe_file=$(mktemp /tmp/validation-report.candidate.XXXXXX)
+        chmod 600 "$probe_file"
+        if ! extract_report /tmp/validation-full-output.md gemini "$probe_file"; then
+          rm -f "$probe_file"
+          retry_count=$((retry_count + 1))
+          if [ "$retry_count" -gt "$max_retries" ]; then
+            return 1
+          fi
+          sleep_before_validation_retry "$((2 ** retry_count))" || return 1
+          continue
+        fi
+        rm -f "$probe_file"
+      fi
       return 0
     else
       echo "❌ Gemini CLI failed (exit code: $exit_code)"
@@ -610,6 +657,7 @@ run_opencode() {
     local exit_code=$?
 
     set -e
+    capture_provider_attempt "$prompt_file" opencode "$full_model" "$exit_code" || return 1
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -689,8 +737,12 @@ extract_report() {
     return 1
   fi
 
-  if ! "$SCRIPT_DIR/scripts/extract-provider-report.py" \
-      --provider "$provider" "$full_output" > "$candidate_file"; then
+  local extractor_options=(--provider "$provider" "$full_output") parser_options=("$candidate_file")
+  if [ "${REQUIRE_COMPLETE_ASSESSMENT:-false}" = true ]; then
+    extractor_options+=(--require-stop-reason)
+    parser_options+=(--require-complete-assessment)
+  fi
+  if ! "$SCRIPT_DIR/scripts/extract-provider-report.py" "${extractor_options[@]}" > "$candidate_file"; then
     echo "::error::Could not isolate the final assistant response from provider output"
     return 1
   fi
@@ -705,7 +757,7 @@ extract_report() {
   fi
   mv -f "$normalized_file" "$candidate_file"
 
-  if ! "$SCRIPT_DIR/scripts/parse-validation-report.py" "$candidate_file" >/dev/null; then
+  if ! "$SCRIPT_DIR/scripts/parse-validation-report.py" "${parser_options[@]}" >/dev/null; then
     echo "::error::Normalized AI output did not contain a valid structured final verdict"
     return 1
   fi

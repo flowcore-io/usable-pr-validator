@@ -78,6 +78,18 @@ inputs:
     description: 'Trusted SHA256 of the recipient certificate DER (64 hex characters). Required with encrypted-report-recipient; never derive from PR-controlled input.'
     required: false
     default: ''
+  encrypted-attempt-recipient:
+    description: 'Explicit opt-in RSA PEM recipient for encrypted per-attempt prompt/stdout/stderr capture. These may contain confidential source/tool data. Keep the private key off-runner; authorize this separate export.'
+    required: false
+    default: ''
+  encrypted-attempt-recipient-sha256:
+    description: 'Trusted SHA256 DER fingerprint for the attempt recipient; required together. Never derive from untrusted PR input.'
+    required: false
+    default: ''
+  require-complete-assessment:
+    description: 'Opt in to explicit COMPLETE assessment and normal OpenCode stop reason. Missing/incomplete assessment retries within the shared deadline; completed FAIL remains blocking.'
+    required: false
+    default: 'false'
   max-retries:
     description: 'Maximum retry attempts for retryable provider failures or incomplete final reports'
     required: false
@@ -174,6 +186,7 @@ runs:
         VALIDATOR_COMMENT_MODE: ${{ inputs.comment-mode }}
         VALIDATOR_MERGE_PROMPT: ${{ inputs.merge-custom-prompt }}
         VALIDATOR_ALLOW_WEB_FETCH: ${{ inputs.allow-web-fetch }}
+        VALIDATOR_COMPLETE_ASSESSMENT: ${{ inputs.require-complete-assessment }}
         VALIDATOR_MAX_RETRIES: ${{ inputs.max-retries }}
         VALIDATOR_TIMEOUT: ${{ inputs.timeout-minutes }}
         VALIDATOR_PROVIDER: ${{ inputs.provider }}
@@ -242,6 +255,11 @@ runs:
 
         if [[ ! "$VALIDATOR_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || [ "$VALIDATOR_TIMEOUT" -gt 360 ]; then
           echo "::error::Invalid timeout-minutes. Must be an integer from 1 to 360"
+          exit 1
+        fi
+
+        if [[ ! "$VALIDATOR_COMPLETE_ASSESSMENT" =~ ^(true|false)$ ]]; then
+          echo "::error::Invalid require-complete-assessment. Must be true or false"
           exit 1
         fi
 
@@ -491,6 +509,9 @@ runs:
         OPENCODE_MODEL: ${{ inputs.opencode-model }}
         FALLBACK_OPENCODE_PROVIDER: ${{ inputs.fallback-opencode-provider }}
         FALLBACK_OPENCODE_MODEL: ${{ inputs.fallback-opencode-model }}
+        ENCRYPTED_ATTEMPT_RECIPIENT: ${{ inputs.encrypted-attempt-recipient }}
+        ENCRYPTED_ATTEMPT_RECIPIENT_SHA256: ${{ inputs.encrypted-attempt-recipient-sha256 }}
+        REQUIRE_COMPLETE_ASSESSMENT: ${{ inputs.require-complete-assessment }}
         MAX_RETRIES: ${{ inputs.max-retries }}
         VALIDATION_TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
         PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
@@ -514,6 +535,15 @@ runs:
       run: |
         ${{ github.action_path }}/scripts/validate.sh
     
+    - name: Upload Encrypted Attempt Diagnostics
+      if: always() && steps.validate.outputs.attempt_diagnostics_ready == 'true' && steps.publication.outputs.report_path != ''
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.set-artifact-name.outputs.artifact_name }}-attempts-encrypted
+        path: ${{ steps.publication.outputs.report_path }}.attempts/*.cms
+        retention-days: 1
+        if-no-files-found: error
+
     - name: Upload Encrypted Final Report
       if: always() && steps.validate.outputs.encrypted_report_ready == 'true' && steps.publication.outputs.report_path != ''
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -614,14 +644,16 @@ runs:
         # Only this invocation's known file/directory, never a broad tmp cleanup.
         if [ -n "$REPORT_PATH" ]; then
           rm -f -- "$REPORT_PATH" "${REPORT_PATH}.cms"
+          rm -f -- "${REPORT_PATH}.attempts/"*.cms
+          rmdir -- "${REPORT_PATH}.attempts" 2>/dev/null || true
           rmdir -- "$(dirname "$REPORT_PATH")" 2>/dev/null || true
         fi
         echo "✅ Temporary files cleaned up"
     
-    - name: Fail on Critical Violations
+    - name: Fail on Unsuccessful Validation
       if: inputs.fail-on-critical == 'true' && steps.validate.outputs.validation_passed == 'false'
       shell: bash
       run: |
-        echo "::error::❌ Critical violations found in PR validation"
+        echo "::error::Validation failed or assessment did not complete"
         echo "Critical issues: ${{ steps.validate.outputs.critical_issues }}"
         exit 1

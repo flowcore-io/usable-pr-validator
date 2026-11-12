@@ -1125,3 +1125,13 @@ artifact's workflow/run/head provenance and investigate the cited code. Encrypti
 protects confidentiality and ciphertext integrity; it does not authenticate a
 reviewer's identity or make a finding correct. Do not paste decrypted content into
 public comments, logs, or a public validator PR.
+
+### Opt-in assessment completion and encrypted attempt diagnostics
+
+`require-complete-assessment: 'true'` requires exactly one `- **Assessment**: COMPLETE` line in the final report's Validation Outcome and an OpenCode terminal finish reason of `stop`. Missing or INCOMPLETE assessments consume the existing whole-review retry budget, then the configured fallback, under the same shared deadline. A completed FAIL, including zero critical issues, remains a completed blocking verdict. Defaults preserve existing consumers. This status verifies the execution contract, not the truth of claimed review coverage.
+
+Separate `encrypted-attempt-recipient` and `encrypted-attempt-recipient-sha256` inputs explicitly authorize exporting each attempt's assembled prompt, provider JSON stdout and stderr. These can contain confidential source and tool results. Supply a trusted RSA public certificate and its SHA256 DER fingerprint, independently of PR-controlled content; keep its private key off-runner. No environment dump or provider configuration is collected. The action captures immediately after every provider invocation, before extraction and before retry files are overwritten. The bundle includes exact input hashes, attempt/model/exit status and allowlisted run/ref provenance. It encrypts using authenticated CMS AES-256-GCM and RSA-OAEP/SHA256, uploads ciphertext only with one-day retention, then removes its local ciphertext during unconditional cleanup. Capture failure blocks execution, with no plaintext fallback. Missing private final reports no longer prevent diagnostics when this separate option is enabled.
+
+Public extraction metadata includes allowlisted finish reasons, bounded numeric token/cache/cost fields, and tool-state counts. Unknown text and malformed numeric fields become fixed unknown/null values. No commands, tool arguments, arbitrary errors or raw transcript fields enter these diagnostics. The diff and web-fetch policy now permits read-only Git scope verification and GitHub API GET requests for exact-head CI evidence without permitting general external downloads or GitHub mutations.
+
+This candidate does not establish why a provider stopped early. Use captured evidence before changing context limits or models. Required grounding, existing model configuration, strict terminal extraction, publication policy and failed-verdict gates remain in force. Consumer adoption, stable release and shared alias promotion are separate gates.

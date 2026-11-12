@@ -26,9 +26,7 @@ def openssl(*args, data=None):
     ).stdout
 
 
-def encrypt(report, output):
-    pem = os.environ.get("ENCRYPTED_REPORT_RECIPIENT", "")
-    fingerprint = os.environ.get("ENCRYPTED_REPORT_RECIPIENT_SHA256", "")
+def encrypt_payload(data, output, pem, fingerprint):
     if not re.fullmatch(r"[a-fA-F0-9]{64}", fingerprint):
         raise ValueError("invalid_fingerprint")
     if len(pem) > 16384 or not re.fullmatch(
@@ -36,8 +34,6 @@ def encrypt(report, output):
         r"-----END CERTIFICATE-----\s*", pem
     ):
         raise ValueError("invalid_certificate")
-    text = PUBLICATION.read_private(report)
-    PUBLICATION.PARSER.parse_report(text)
     if not openssl("version").startswith(b"OpenSSL 3."):
         raise ValueError("openssl_3_required")
     with tempfile.TemporaryDirectory(prefix="validator-recipient-") as directory:
@@ -66,7 +62,7 @@ def encrypt(report, output):
             "cms", "-encrypt", "-binary", "-aes-256-gcm", "-outform", "DER",
             "-recip", str(certificate), "-keyopt", "rsa_padding_mode:oaep",
             "-keyopt", "rsa_oaep_md:sha256", "-keyopt", "rsa_mgf1_md:sha256",
-            data=text.encode("utf-8"),
+            data=data,
         )
     if not ciphertext:
         raise ValueError("empty_ciphertext")
@@ -82,6 +78,14 @@ def encrypt(report, output):
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+
+
+def encrypt(report, output):
+    text = PUBLICATION.read_private(report)
+    PUBLICATION.PARSER.parse_report(text)
+    encrypt_payload(text.encode("utf-8"), output,
+                    os.environ.get("ENCRYPTED_REPORT_RECIPIENT", ""),
+                    os.environ.get("ENCRYPTED_REPORT_RECIPIENT_SHA256", ""))
 
 
 class SafeParser(argparse.ArgumentParser):

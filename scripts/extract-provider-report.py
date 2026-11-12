@@ -15,6 +15,7 @@ provider metadata, and private response bodies are never copied into diagnostics
 import argparse
 from collections import Counter
 import json
+import math
 import re
 import sys
 
@@ -45,7 +46,44 @@ def _response_metadata(provider, response):
     }
 
 
-def _opencode(text):
+FINISH_REASONS = {"stop", "tool-calls", "length", "content-filter", "error", "other", "unknown"}
+
+
+def _number(value, maximum):
+    if type(value) is int and 0 <= value <= maximum:
+        return value
+    if type(value) is float and math.isfinite(value) and 0 <= value <= maximum:
+        return value
+    return None
+
+
+def _step_metadata(events):
+    steps = []
+    tools = Counter()
+    for event in events:
+        part = event.get("part")
+        if not isinstance(part, dict):
+            continue
+        if event.get("type") == "tool_use":
+            state = part.get("state")
+            status = state.get("status") if isinstance(state, dict) else None
+            tools[status if status in ("completed", "error", "running", "pending") else "unknown"] += 1
+        if event.get("type") != "step_finish":
+            continue
+        reason = part.get("reason")
+        item = {"reason": reason if isinstance(reason, str) and reason in FINISH_REASONS else "unknown"}
+        tokens = part.get("tokens")
+        if isinstance(tokens, dict):
+            item["tokens"] = {key: _number(tokens.get(key), 10**12) for key in ("total", "input", "output", "reasoning")}
+            cache = tokens.get("cache")
+            if isinstance(cache, dict):
+                item["cache"] = {key: _number(cache.get(key), 10**12) for key in ("read", "write")}
+        item["cost"] = _number(part.get("cost"), 10**6)
+        steps.append(item)
+    return {"steps": steps[-128:], "steps_omitted": max(0, len(steps) - 128), "tool_states": dict(tools)}
+
+
+def _opencode(text, require_stop_reason=False):
     events = []
     counts = Counter()
     message_ids = set()
@@ -95,6 +133,8 @@ def _opencode(text):
         "terminal_event": _safe_event_type(events[-1].get("type")) if events else None,
     })
 
+    diagnostics.update(_step_metadata(events))
+
     if not events:
         diagnostics["error_code"] = "empty_output"
         raise ExtractionError("empty_output", "OpenCode output has no events", diagnostics)
@@ -124,6 +164,8 @@ def _opencode(text):
             "OpenCode terminal step has an invalid part",
             diagnostics,
         )
+    if require_stop_reason and terminal_part.get("reason") != "stop":
+        raise ExtractionError("terminal_reason_not_stop", "OpenCode did not finish normally", diagnostics)
     message_id = terminal_part.get("messageID")
     if not isinstance(message_id, str) or not message_id:
         diagnostics["error_code"] = "missing_terminal_message_id"
@@ -232,9 +274,9 @@ def _gemini(text):
     return response, diagnostics
 
 
-def extract_with_diagnostics(provider, text):
+def extract_with_diagnostics(provider, text, require_stop_reason=False):
     if provider == "opencode":
-        return _opencode(text)
+        return _opencode(text, require_stop_reason=require_stop_reason)
     if provider == "gemini":
         return _gemini(text)
     raise ExtractionError("unsupported_provider", "unsupported provider", {"provider": provider})
@@ -256,11 +298,12 @@ def _log_diagnostics(diagnostics):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", choices=("opencode", "gemini"), required=True)
+    parser.add_argument("--require-stop-reason", action="store_true")
     parser.add_argument("input")
     args = parser.parse_args(argv)
     try:
         with open(args.input, encoding="utf-8") as handle:
-            result, diagnostics = extract_with_diagnostics(args.provider, handle.read())
+            result, diagnostics = extract_with_diagnostics(args.provider, handle.read(), require_stop_reason=args.require_stop_reason)
     except OSError as exc:
         _log_diagnostics({"provider": args.provider, "error_code": "input_read_failed"})
         print(f"Could not extract provider response: {exc}", file=sys.stderr)

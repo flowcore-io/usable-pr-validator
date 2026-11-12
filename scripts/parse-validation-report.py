@@ -60,7 +60,7 @@ def normalize_report(text):
     return normalized
 
 
-def parse_report(text):
+def parse_report(text, require_complete=False):
     text = normalize_report(text)
     if text.count(OUTCOME) != 1:
         raise ValueError("report must contain exactly one validation outcome")
@@ -72,6 +72,13 @@ def parse_report(text):
     critical_counts = CRITICAL_RE.findall(outcome)
     if len(statuses) != 1 or len(critical_counts) != 1:
         raise ValueError("validation outcome must contain one status and one critical count")
+    if require_complete:
+        # Count every field, including annotated or malformed values, before
+        # validating its value. A second contradictory field must not vanish.
+        assessment = re.findall(r"^[ \t]*[-*][ \t]+(?:\*\*)?Assessment(?:\*\*)?[ \t]*:([^\r\n]*)$", outcome, re.MULTILINE)
+        canonical = re.findall(r"^- \*\*Assessment\*\*:[ \t]*COMPLETE[ \t]*$", outcome, re.MULTILINE)
+        if len(assessment) != 1 or len(canonical) != 1:
+            raise ValueError("assessment_missing_or_incomplete")
     status = statuses[0]
     critical_issues = int(critical_counts[0])
     if critical_issues > 1000:
@@ -90,6 +97,7 @@ def parse_report(text):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--normalize", action="store_true", help="print normalized report Markdown")
+    parser.add_argument("--require-complete-assessment", action="store_true")
     parser.add_argument("report")
     args = parser.parse_args(argv)
     try:
@@ -108,7 +116,7 @@ def main(argv=None):
         return 0
 
     try:
-        result = parse_report(text)
+        result = parse_report(text, require_complete=args.require_complete_assessment)
     except ValueError as exc:
         print(f"Invalid validation report: {exc}", file=sys.stderr)
         return 1
